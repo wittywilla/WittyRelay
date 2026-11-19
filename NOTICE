@@ -1,0 +1,10 @@
+WittyRelay
+Copyright (C) 2026 WittyWilla and contributors
+
+Licensed under the GNU Affero General Public License, version 3 or (at your
+option) any later version. See LICENSE.
+
+Built on go-libp2p (MIT; Copyright (c) 2014 Juan Batiz-Benet and the libp2p
+contributors) and its dependencies, each under its own licence (MIT, BSD,
+Apache-2.0, MPL-2.0). `go mod download` and the module cache hold each one's
+licence text.

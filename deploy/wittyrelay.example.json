@@ -1,0 +1,24 @@
+{
+  "name": "My WittyRelay",
+  "note": "Run by me, for my family's servers.",
+  "port": 4001,
+  "announce": ["/dns4/relay.example.com/udp/4001/quic-v1", "/dns4/relay.example.com/tcp/4001"],
+  "http": ":8080",
+  "dataDir": "/data",
+  "access": "key",
+  "keys": ["change-me-run-wittyrelay-key"],
+  "limits": {
+    "kbps": 8000,
+    "totalKbps": 50000,
+    "maxHeight": 1080,
+    "dataMiB": 4096,
+    "minutes": 180,
+    "servers": 32,
+    "circuits": 8,
+    "perIP": 4,
+    "registerPerMinute": 10,
+    "devicesPerServer": 512
+  },
+  "registerTTL": "15m",
+  "logLevel": "info"
+}

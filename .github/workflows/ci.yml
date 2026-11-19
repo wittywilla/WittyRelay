@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+      - name: Formatting
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: Licence headers
+        run: |
+          missing=$(grep -L "SPDX-License-Identifier: AGPL-3.0-or-later" $(git ls-files '*.go' Dockerfile docker-compose.yml) || true)
+          if [ -n "$missing" ]; then echo "No SPDX header: $missing"; exit 1; fi
+      - run: go vet ./...
+      - name: Downloaded modules are what go.sum says
+        run: go mod verify
+      - name: Tests, with the race detector
+        run: go test -race -count=1 ./...
+      - name: Fuzz the registration parser for a while
+        run: go test -run '^$' -fuzz FuzzReadMessage -fuzztime 60s ./internal/relay
+      - name: Known vulnerabilities in Go code
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Builds for amd64 and arm64
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+      - name: Starts, answers its health check, and refuses a bad configuration
+        run: |
+          docker build -t wittyrelay:ci .
+          docker run -d --name relay -e WITTYRELAY_ACCESS=open -e WITTYRELAY_ALLOW_PRIVATE=1 -p 127.0.0.1:8080:8080 wittyrelay:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/readyz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8080/info
+          docker logs relay
+          test "$(docker inspect -f '{{.Config.User}}' wittyrelay:ci)" = "65532:65532"
+          if docker run --rm -e WITTYRELAY_ACCESS=key wittyrelay:ci; then echo "a key relay with no keys started"; exit 1; fi

@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# A WittyRelay for your own servers (and friends'). Steps are in README.md:
+#   1. docker compose run --rm wittyrelay key      -> put the key below
+#   2. set WITTYRELAY_ANNOUNCE to your public name or address
+#   3. docker compose up -d && docker compose logs wittyrelay | grep "relay address"
+services:
+  wittyrelay:
+    image: ghcr.io/wittywilla/wittyrelay:latest
+    # Or build it here: build: .
+    restart: unless-stopped
+    ports:
+      - "4001:4001/udp"   # QUIC: what servers and apps use first
+      - "4001:4001/tcp"   # TCP: for networks that let no UDP out
+      - "127.0.0.1:8080:8080"   # health, metrics and /info: this machine only
+    volumes:
+      - wittyrelay-data:/data   # the relay's key: keep it, servers pin its ID
+    environment:
+      WITTYRELAY_NAME: "My WittyRelay"
+      WITTYRELAY_NOTE: "Run by me, for my family's servers."
+      # How servers reach this relay from the internet: your domain or public IP.
+      WITTYRELAY_ANNOUNCE: "/dns4/relay.example.com/udp/4001/quic-v1,/dns4/relay.example.com/tcp/4001"
+      # "key": only servers you gave a key to. "open": any server (still registered and limited).
+      WITTYRELAY_ACCESS: "key"
+      WITTYRELAY_KEYS: "change-me-run-wittyrelay-key"
+      # Limits, told to every server before it uses the relay.
+      WITTYRELAY_KBPS: "8000"         # per connection, each way
+      WITTYRELAY_TOTAL_KBPS: "50000"  # everything together, each way
+      WITTYRELAY_MAX_HEIGHT: "1080"   # picture size streams through it keep to
+      WITTYRELAY_DATA_MIB: "4096"     # per connection, then it starts a new one
+      WITTYRELAY_MINUTES: "180"
+      WITTYRELAY_SERVERS: "32"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 256
+volumes:
+  wittyrelay-data:
