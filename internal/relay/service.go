@@ -45,7 +45,7 @@ import (
 )
 
 // Version is set at build time.
-var Version = "0.1.0-dev"
+var Version = "0.2.0-dev"
 
 // UserAgent is what other nodes are told this is.
 const UserAgent = "wittyrelay/1"

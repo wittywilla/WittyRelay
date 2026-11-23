@@ -1,0 +1,52 @@
+{{define "content"}}{{with .Data}}
+<div class="page-head">
+  <h1>Connect a server</h1>
+  <p class="muted">How to point a WittyMediaServer at this relay. Apps need nothing: they use it by themselves when a direct connection can't be made.</p>
+</div>
+{{if .Welcome}}<p class="note ok" role="status">The password is set and you're signed in. Here's how to put the relay to use.</p>{{end}}
+
+<ol class="steps">
+  <li class="card">
+    <h2>Open the relay's port</h2>
+    <p>On this machine's firewall, and on the router if it's at home, let these in from the internet:</p>
+    <ul class="plain">
+      {{range .Ports}}{{if .Public}}<li><code>{{.Port}}/{{.Proto}}</code>: {{.Use}}</li>{{end}}{{end}}
+    </ul>
+    <p class="muted small">Ports 8080 and 8081 (health, metrics and this page) stay closed to the internet.</p>
+  </li>
+  <li class="card">
+    {{if eq .Access "open"}}
+    <h2>No key needed</h2>
+    <p>This relay is open: any server may register. Each is still held to the limits on Settings, and only devices a server lists reach it.</p>
+    {{else}}
+    <h2>Give the server owner an access key</h2>
+    <p>Make one key for each owner, add it to <code>WITTYRELAY_KEYS</code> (comma-separated) and restart the relay:</p>
+    <pre><code>docker compose run --rm wittyrelay key</code></pre>
+    <p class="muted small">Keys are passwords: this page never shows them. Take a key out of <code>WITTYRELAY_KEYS</code> to cut that owner off.</p>
+    {{end}}
+  </li>
+  <li class="card">
+    <h2>Add the relay on the server</h2>
+    <p>On the WittyMediaServer: <strong>Settings → Remote Access → Peer-to-peer connections → Your own WittyRelay</strong>. Paste one of these addresses{{if ne .Access "open"}} and the access key{{end}}, choose <strong>Check</strong> to read what the relay allows, then <strong>Use this relay</strong>.</p>
+    {{if .Addrs}}
+    <ul class="addrs">
+      {{range .Addrs}}<li><code>{{.}}</code> <button class="btn ghost small" type="button" data-copy="{{.}}">Copy</button></li>{{end}}
+    </ul>
+    {{else}}<p class="note warn">The relay has no address yet. Is it listening? See Health.</p>{{end}}
+    <p class="muted small">The address names this machine as the internet reaches it. If it shows a private address (10.…, 172.16–31.…, 192.168.…), set <code>WITTYRELAY_ANNOUNCE</code> to your domain or public IP.</p>
+  </li>
+  <li class="card">
+    <h2>Check it worked</h2>
+    <p>Within a minute the server shows on <a href="/status">Status</a> under Registered servers, with a short ID. It renews its place every five minutes.</p>
+  </li>
+</ol>
+
+<section class="card" aria-labelledby="compose-title">
+  <div class="card-head row">
+    <h2 id="compose-title">docker-compose.yml</h2>
+    <button class="btn ghost small" type="button" data-copy-from="compose">Copy</button>
+  </div>
+  <p class="muted small">A relay with this admin page on, kept to the machine itself. Replace the address and key.</p>
+  <pre class="code" id="compose"><code>{{.Compose}}</code></pre>
+</section>
+{{end}}{{end}}

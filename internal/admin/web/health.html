@@ -1,0 +1,59 @@
+{{define "content"}}{{with .Data}}
+<div class="page-head">
+  <h1>Health</h1>
+  <p class="muted">What the relay checks about itself, its addresses, and its recent warnings.</p>
+</div>
+
+<section class="card" aria-labelledby="checks-title">
+  <h2 id="checks-title">Checks</h2>
+  <ul class="checks">
+    {{range .Checks}}
+    <li class="check" data-state="{{.State}}">
+      <span class="dot" aria-hidden="true"></span>
+      <div>
+        <strong>{{.Title}}</strong><span class="visually-hidden"> ({{if eq .State "ok"}}fine{{else if eq .State "warn"}}needs a look{{else if eq .State "bad"}}a problem{{else}}to know{{end}})</span>
+        {{if .Detail}}<p>{{.Detail}}</p>{{end}}
+      </div>
+    </li>
+    {{end}}
+  </ul>
+</section>
+
+<div class="cols">
+  <section class="card" aria-labelledby="addr-title">
+    <h2 id="addr-title">Public addresses</h2>
+    <p class="muted small">What servers are told to reach this relay at. The last part is the relay's ID, which servers check on every connection.</p>
+    {{if .Addrs}}
+    <ul class="addrs">
+      {{range .Addrs}}<li><code>{{.}}</code> <button class="btn ghost small" type="button" data-copy="{{.}}">Copy</button></li>{{end}}
+    </ul>
+    {{else}}<p class="empty">No addresses yet.</p>{{end}}
+  </section>
+
+  <section class="card" aria-labelledby="ports-title">
+    <h2 id="ports-title">Ports</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th scope="col">Port</th><th scope="col">What for</th><th scope="col">Open to</th></tr></thead>
+        <tbody>
+          {{range .Ports}}<tr><td class="nowrap"><code>{{.Port}}/{{.Proto}}</code></td><td>{{.Use}}</td><td>{{if .Public}}The internet{{else}}This machine only{{end}}</td></tr>{{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<section class="card" aria-labelledby="err-title">
+  <h2 id="err-title">Recent warnings and errors</h2>
+  <p class="muted small">The last 50, newest first. Only the message is kept: never addresses, keys, or anything the relay carries.</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th scope="col">When (UTC)</th><th scope="col">Level</th><th scope="col">What</th></tr></thead>
+      <tbody>
+        {{range .Errors}}<tr><td class="nowrap">{{.Time}}</td><td><span class="lvl" data-level="{{.Level}}">{{.Level}}</span></td><td>{{.Message}}{{if .Detail}} <span class="muted">({{.Detail}})</span>{{end}}</td></tr>
+        {{else}}<tr><td colspan="3" class="empty">None since the relay started.</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}{{end}}

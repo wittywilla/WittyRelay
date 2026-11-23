@@ -1,0 +1,75 @@
+{{define "content"}}{{with .Data}}
+<div class="page-head">
+  <h1>Status</h1>
+  <p class="muted">Counts only: the relay can't see what it carries, and this page doesn't show who uses it. <span class="live" data-live>Updates every 5 seconds.</span></p>
+</div>
+
+<section class="tiles" aria-label="The relay now">
+  <article class="tile">
+    <h2>Relay</h2>
+    <p class="big"><span data-k="state">{{.State}}</span></p>
+    <p class="muted">Version <span data-k="version">{{.Version}}</span>, up <span data-k="uptime">{{.Uptime}}</span></p>
+  </article>
+  <article class="tile">
+    <h2>Servers registered</h2>
+    <p class="big"><span data-k="servers">{{.Servers}}</span> <small>of <span data-k="serversMax">{{.ServersMax}}</span></small></p>
+    <p class="muted"><span data-k="places">{{.Places}}</span> holding a place now</p>
+  </article>
+  <article class="tile">
+    <h2>Device connections</h2>
+    <p class="big"><span data-k="circuits">{{.Circuits}}</span> <small>open</small></p>
+    <p class="muted"><span data-k="perMinute">{{.PerMinute}}</span> in the last minute, <span data-k="opened">{{.Opened}}</span> since start</p>
+  </article>
+  <article class="tile">
+    <h2>Bandwidth now</h2>
+    <p class="big"><span data-k="now">{{.Now}}</span></p>
+    <p class="muted">Peak <span data-k="peak">{{.Peak}}</span>, <span data-k="peakAt">{{.PeakAt}}</span></p>
+  </article>
+  <article class="tile">
+    <h2>Limits hit</h2>
+    <p class="big"><span data-k="limitsHit">{{.LimitsHit}}</span></p>
+    <p class="muted">Refusals since start, listed below</p>
+  </article>
+</section>
+
+<section class="card" aria-labelledby="bw-title">
+  <div class="card-head">
+    <h2 id="bw-title">Bandwidth, last 10 minutes</h2>
+    <p class="muted"><span data-k="cap">{{.Cap}}</span>. Both ways together. <span data-k="relayed">{{.Relayed}}</span> passed on since start.</p>
+  </div>
+  <div class="spark-wrap">
+    <svg class="spark" viewBox="0 0 600 120" preserveAspectRatio="none" role="img" aria-labelledby="bw-title bw-top">
+      <line class="spark-base" x1="0" y1="118" x2="600" y2="118"/>
+      <polyline class="spark-line" data-spark points="{{.Spark}}"/>
+    </svg>
+    <p class="spark-top muted" id="bw-top">Top of the graph: <span data-k="sparkTop">{{.SparkTop}}</span></p>
+  </div>
+</section>
+
+<div class="cols">
+  <section class="card" aria-labelledby="ref-title">
+    <h2 id="ref-title">Limits hit, by reason</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th scope="col">Reason</th><th scope="col" class="num">Times</th></tr></thead>
+        <tbody data-rows="refused" data-cols="label count" data-empty="Nothing refused since the relay started.">
+          {{range .Refused}}<tr><td>{{.Label}}</td><td class="num">{{.Count}}</td></tr>{{else}}<tr><td colspan="2" class="empty">Nothing refused since the relay started.</td></tr>{{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="reg-title">
+    <h2 id="reg-title">Registered servers</h2>
+    <p class="muted small">Short IDs are made fresh each time the relay starts. They can't be traced back to a server.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th scope="col">Server</th><th scope="col" class="num">Devices listed</th><th scope="col" class="num">Renews within</th></tr></thead>
+        <tbody data-rows="registered" data-cols="id devices renews" data-empty="No servers registered right now.">
+          {{range .Registered}}<tr><td><code>{{.ID}}</code></td><td class="num">{{.Devices}}</td><td class="num">{{.Renews}}</td></tr>{{else}}<tr><td colspan="3" class="empty">No servers registered right now.</td></tr>{{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{{end}}{{end}}

@@ -7,15 +7,18 @@
 //	wittyrelay key        print a new access key for a server
 //	wittyrelay id         print the relay's ID (making its key if there is none)
 //	wittyrelay health     exit 0 if the relay on this machine answers (for Docker)
+//	wittyrelay admin-password   set the admin page's password, read from standard input
 //	wittyrelay version
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -28,6 +31,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 
+	"github.com/wittywilla/wittyrelay/internal/admin"
 	"github.com/wittywilla/wittyrelay/internal/relay"
 )
 
@@ -84,29 +88,56 @@ func command(name string) int {
 			return 1
 		}
 		return 0
+	case "admin-password":
+		return adminPassword()
 	case "version", "-version", "--version":
 		fmt.Println("wittyrelay", relay.Version)
 		return 0
 	case "help", "-h", "--help":
-		fmt.Println("wittyrelay [key|id|health|version]: see README.md for the configuration")
+		fmt.Println("wittyrelay [key|id|health|admin-password|version]: see README.md for the configuration")
 		return 0
 	}
 	fmt.Fprintf(os.Stderr, "unknown command %q\n", name)
 	return 2
 }
 
+// adminPassword sets the admin page's password from standard input:
+//
+//	docker compose exec -T wittyrelay wittyrelay admin-password <<< 'a new password'
+func adminPassword() int {
+	dir := strings.TrimSpace(os.Getenv("WITTYRELAY_DATA_DIR"))
+	if cfg, err := relay.Load(); err == nil {
+		dir = cfg.DataDir
+	} else if dir == "" {
+		dir = relay.Default().DataDir
+	}
+	if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
+		fmt.Fprint(os.Stderr, "New admin password (shown as you type; or pipe it in): ")
+	}
+	line, err := bufio.NewReader(io.LimitReader(os.Stdin, 4096)).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	pw := strings.TrimRight(line, "\r\n")
+	if msg := admin.CheckNewPassword(pw, pw); msg != "" {
+		fmt.Fprintln(os.Stderr, msg)
+		return 1
+	}
+	if err := admin.SetPassword(dir, pw); err != nil {
+		fmt.Fprintln(os.Stderr, "the password couldn't be kept:", err)
+		return 1
+	}
+	fmt.Println("The admin password is set. Sign in on the admin page.")
+	return 0
+}
+
 func run() int {
 	cfg, err := relay.Load()
-	lvl := slog.LevelInfo
-	switch strings.ToLower(cfg.LogLevel) {
-	case "debug":
-		lvl = slog.LevelDebug
-	case "warn":
-		lvl = slog.LevelWarn
-	case "error":
-		lvl = slog.LevelError
-	}
-	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl}))
+	level := new(slog.LevelVar)
+	level.Set(admin.LevelOf(cfg.LogLevel))
+	ring := relay.NewLogRing(50)
+	log := slog.New(relay.RingHandler(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}), ring))
 	if err != nil {
 		log.Error("the configuration isn't usable", "err", err)
 		return 2
@@ -136,14 +167,43 @@ func run() int {
 			}
 		}()
 	}
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	var adm *http.Server
+	if cfg.Admin.Listen != "" {
+		path, _ := relay.ConfigPath()
+		a, err := admin.New(r, admin.Options{Config: cfg, ConfigPath: path, DataDir: cfg.DataDir, Ring: ring, Level: level, Log: log})
+		if err != nil {
+			log.Error("the admin page couldn't start", "err", err)
+			return 1
+		}
+		go a.Run(ctx)
+		adm = a.HTTPServer(cfg.Admin.Listen)
+		go func() {
+			if err := adm.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error("the admin page stopped", "err", err)
+			}
+		}()
+		log.Info("admin page", "listen", cfg.Admin.Listen)
+		if tok := a.SetupToken(); tok != "" {
+			// Straight to the log, past the level and the page's own list of warnings.
+			slog.New(slog.NewJSONHandler(os.Stdout, nil)).Info("admin page: no password yet. Open it and set one with this setup token",
+				"setup token", tok, "or", "wittyrelay admin-password")
+		}
+	} else {
+		log.Info("admin page off; set WITTYRELAY_ADMIN to turn it on")
+	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	log.Info("stopping")
-	if srv != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = srv.Shutdown(ctx)
-		cancel()
+	stop()
+	for _, s := range []*http.Server{srv, adm} {
+		if s != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = s.Shutdown(ctx)
+			cancel()
+		}
 	}
 	_ = r.Close()
 	return 0
