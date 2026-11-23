@@ -150,6 +150,8 @@ docker buildx build --platform linux/amd64,linux/arm64 -t wittyrelay .
 
 Go 1.27. CI runs the tests with the race detector, a minute of fuzzing, `govulncheck`, and builds and starts the image for both platforms.
 
+**Working on a Mac?** Start with WittyMediaServer's [MAC-START-HERE.md](https://github.com/wittywilla/WittyMediaServer/blob/v0.8.1-alpha/MAC-START-HERE.md): what to install, what to clone, and every Mac task in order: this repository's is item 7.9.
+
 ## Licence
 
 GNU Affero General Public License, version 3 or later: see [LICENSE](LICENSE) and [NOTICE](NOTICE). If you run a changed WittyRelay for others, the AGPL asks you to offer them its source.
