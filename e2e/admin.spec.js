@@ -23,10 +23,39 @@ test.afterAll(async () => {
   await page.close()
 })
 
+// A signed-out page (first run, signing in) is one card, centred both ways, with the relay's mark and name at its
+// top, and fits without scrolling on any screen 720 pixels tall or more (WittyMediaServer's docs/DESIGN.md,
+// "Standalone pages"). Checked at the sizes people use, then put back.
+const SIZES = [[1280, 720], [1366, 768], [1440, 900], [1920, 1080], [360, 640], [390, 844]]
+async function standalone(what) {
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height })
+    const m = await page.evaluate(() => {
+      const card = document.querySelector('[data-standalone-card]')
+      const r = card.getBoundingClientRect()
+      const mark = card.querySelector('.sa-brand svg').getBoundingClientRect()
+      const root = document.scrollingElement
+      return { left: r.left, right: innerWidth - r.right, top: r.top, bottom: innerHeight - r.bottom, scroll: root.scrollHeight - innerHeight, wide: root.scrollWidth - innerWidth,
+        name: card.querySelector('.sa-brand').innerText.trim(), mark: mark.width > 8 && mark.height > 8 }
+    })
+    const at = `${what} at ${width}x${height}`
+    expect(m.wide, `${at}: no sideways scrolling`).toBeLessThanOrEqual(1)
+    expect(Math.abs(m.left - m.right), `${at}: centred across`).toBeLessThanOrEqual(4)
+    expect(m.mark, `${at}: the relay's mark`).toBe(true)
+    expect(m.name.length, `${at}: its name`).toBeGreaterThan(0)
+    if (height >= 720) {
+      expect(m.scroll, `${at}: no scrolling`).toBeLessThanOrEqual(1)
+      expect(Math.abs(m.top - m.bottom), `${at}: centred down`).toBeLessThanOrEqual(4)
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 })
+}
+
 test('first run: the setup token sets the password', async () => {
   await page.goto('/')
   await expect(page).toHaveURL(/\/setup$/)
   await expect(page.getByRole('heading', { name: 'Set the admin password' })).toBeVisible()
+  await standalone('first run')
 
   await page.getByLabel('Setup token').fill('not-the-token')
   await page.getByLabel('New password').fill(password)
@@ -86,6 +115,7 @@ test('sign out, a wrong password, then sign in', async () => {
   await expect(page).toHaveURL(/\/login\?out=1$/)
   await page.goto('/status')
   await expect(page).toHaveURL(/\/login$/)
+  await standalone('sign in')
   await page.getByLabel('Admin password').fill('not the password')
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByRole('alert')).toContainText("isn't the admin password")
