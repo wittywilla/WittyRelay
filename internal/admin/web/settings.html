@@ -1,0 +1,71 @@
+{{define "content"}}{{$csrf := .CSRF}}{{with .Data}}
+<div class="page-head">
+  <h1>Settings</h1>
+  <p class="muted">Saved to <code>{{.ConfigPath}}</code>. Settings set in the environment win, and show here as read-only.</p>
+</div>
+{{if .Applied}}<p class="note ok" role="status">Saved and applied.</p>
+{{else if .Saved}}<p class="note ok" role="status">Saved.</p>{{end}}
+{{if .LoadErr}}<p class="note bad" role="alert">The configuration file has a problem, and the relay would refuse it at its next start: {{.LoadErr}}</p>
+{{else if .Pending}}<p class="note warn" role="status">Restart the relay to apply the saved limits. Servers are told the limits when they register, so they change only at a restart: <code>docker compose restart wittyrelay</code></p>{{end}}
+
+<form method="post" action="/settings" class="settings" novalidate>
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+  {{range .Groups}}
+  <fieldset class="card">
+    <legend><h2>{{.Title}}</h2></legend>
+    {{if .Hint}}<p class="muted small">{{.Hint}}</p>{{end}}
+    <div class="fields">
+    {{range .Fields}}
+      <div class="field">
+        <label for="f-{{.Name}}">{{.Label}}</label>
+        {{if eq .Kind "number"}}
+        <div class="with-unit">
+          <input id="f-{{.Name}}" name="{{.Name}}" type="number" inputmode="numeric" step="1" min="{{.Min}}" max="{{.Max}}" value="{{.Value}}"{{if .Env}} disabled{{end}} aria-describedby="h-{{.Name}}">
+          <span class="unit">{{.Unit}}</span>
+        </div>
+        {{else if eq .Kind "textarea"}}
+        <textarea id="f-{{.Name}}" name="{{.Name}}" rows="3" maxlength="{{.MaxLen}}"{{if .Env}} disabled{{end}} aria-describedby="h-{{.Name}}">{{.Value}}</textarea>
+        {{else if eq .Kind "select"}}
+        {{$v := .Value}}
+        <select id="f-{{.Name}}" name="{{.Name}}"{{if .Env}} disabled{{end}} aria-describedby="h-{{.Name}}">
+          {{range .Options}}<option value="{{.}}"{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}
+        </select>
+        {{else}}
+        <input id="f-{{.Name}}" name="{{.Name}}" type="text" maxlength="{{.MaxLen}}" value="{{.Value}}"{{if .Env}} disabled{{end}} aria-describedby="h-{{.Name}}">
+        {{end}}
+        <p class="hint" id="h-{{.Name}}">{{if .Env}}<span class="lock">Set by <code>{{.Env}}</code> in the environment.</span> {{end}}{{.Hint}}</p>
+      </div>
+    {{end}}
+    </div>
+  </fieldset>
+  {{end}}
+  <div class="actions">
+    <button class="btn primary" type="submit">Save settings</button>
+    <p class="muted small">The log level applies at once; limits at the next restart.</p>
+  </div>
+</form>
+
+<section class="card" id="password" aria-labelledby="pw-title">
+  <h2 id="pw-title">Admin password</h2>
+  {{if .PwChanged}}<p class="note ok" role="status">Password changed. Other browsers are signed out.</p>{{end}}
+  {{if .PwError}}<p class="note bad" role="alert">{{.PwError}}</p>{{end}}
+  <form method="post" action="/password" class="stack narrow">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <input type="text" name="username" value="admin" autocomplete="username" class="visually-hidden" tabindex="-1" aria-hidden="true">
+    <div class="field">
+      <label for="current">Current password</label>
+      <input id="current" name="current" type="password" required autocomplete="current-password">
+    </div>
+    <div class="field">
+      <label for="new">New password</label>
+      <input id="new" name="password" type="password" required minlength="10" maxlength="256" autocomplete="new-password" aria-describedby="new-hint">
+      <p class="hint" id="new-hint">At least 10 characters.</p>
+    </div>
+    <div class="field">
+      <label for="again">The same again</label>
+      <input id="again" name="again" type="password" required minlength="10" maxlength="256" autocomplete="new-password">
+    </div>
+    <button class="btn" type="submit">Change password</button>
+  </form>
+</section>
+{{end}}{{end}}

@@ -1,0 +1,32 @@
+{{define "content"}}
+<section class="auth card">
+  <h1>Set the admin password</h1>
+  <p>This page shows how your relay is doing and changes its limits. First, choose a password for it.</p>
+  {{if not .Secure}}<p class="note warn" role="alert">This page isn't open over HTTPS or from this machine, so the browser won't keep you signed in. Open it at <code>http://localhost:8081</code> on the relay's machine, through an SSH tunnel, or behind a reverse proxy with HTTPS.</p>{{end}}
+  <form method="post" action="/setup" class="stack">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="text" name="username" value="admin" autocomplete="username" class="visually-hidden" tabindex="-1" aria-hidden="true">
+    <div class="field">
+      <label for="token">Setup token</label>
+      <input id="token" name="token" type="text" required autocomplete="one-time-code" spellcheck="false" autocapitalize="off" aria-describedby="token-hint">
+      <p class="hint" id="token-hint">It's in the relay's log, printed when it started:<br><code>docker compose logs wittyrelay | grep "setup token"</code></p>
+    </div>
+    <div class="field">
+      <label for="password">New password</label>
+      <input id="password" name="password" type="password" required minlength="10" maxlength="256" autocomplete="new-password" aria-describedby="pw-hint">
+      <p class="hint" id="pw-hint">At least 10 characters. A few words together is easy to remember and hard to guess.</p>
+    </div>
+    <div class="field">
+      <label for="again">The same password again</label>
+      <input id="again" name="again" type="password" required minlength="10" maxlength="256" autocomplete="new-password">
+    </div>
+    <button class="btn primary" type="submit">Set password and sign in</button>
+  </form>
+  <details class="aside">
+    <summary>Set it from the command line instead</summary>
+    <p>On the relay's machine:</p>
+    <pre><code>docker compose exec -T wittyrelay wittyrelay admin-password &lt;&lt;&lt; 'your new password'</code></pre>
+    <p>Then reload this page and sign in.</p>
+  </details>
+</section>
+{{end}}

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="same-origin">
+<meta name="robots" content="noindex, nofollow">
+<title>{{.Title}} · WittyRelay</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="8" class="mark-bg"/><path class="mark-fg" d="M7 11h6l3 10 3-10h6" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Witty<b>Relay</b></span>
+      <span class="visually-hidden">admin</span>
+    </a>
+    {{if .Signed}}
+    <span class="pill" data-k="state" data-state="{{if .Up}}up{{else}}down{{end}}">{{if .Up}}Up{{else}}Starting{{end}}</span>
+    <form class="signout" method="post" action="/logout">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="btn ghost small" type="submit">Sign out</button>
+    </form>
+    {{end}}
+  </div>
+  {{if .Signed}}
+  <nav class="tabs" aria-label="Admin pages">
+    <a href="/status"{{if eq .Nav "status"}} aria-current="page"{{end}}>Status</a>
+    <a href="/health"{{if eq .Nav "health"}} aria-current="page"{{end}}>Health</a>
+    <a href="/settings"{{if eq .Nav "settings"}} aria-current="page"{{end}}>Settings</a>
+    <a href="/connect"{{if eq .Nav "connect"}} aria-current="page"{{end}}>Connect a server</a>
+  </nav>
+  {{end}}
+</header>
+<main id="main" tabindex="-1">
+{{if .Flash}}<p class="note ok" role="status">{{.Flash}}</p>{{end}}
+{{if .Error}}<p class="note bad" role="alert">{{.Error}}</p>{{end}}
+{{template "content" .}}
+</main>
+<footer class="foot">
+  <span>WittyRelay {{.Ver}}{{if .Name}} · {{.Name}}{{end}}</span>
+  <span>Free software, <a href="https://github.com/wittywilla/WittyRelay" rel="noreferrer">source and help</a></span>
+</footer>
+</body>
+</html>

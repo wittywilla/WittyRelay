@@ -28,7 +28,7 @@ jobs:
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - name: Licence headers
         run: |
-          missing=$(grep -L "SPDX-License-Identifier: AGPL-3.0-or-later" $(git ls-files '*.go' Dockerfile docker-compose.yml) || true)
+          missing=$(grep -L "SPDX-License-Identifier: AGPL-3.0-or-later" $(git ls-files '*.go' '*.js' '*.css' '*.sh' Dockerfile docker-compose.yml) || true)
           if [ -n "$missing" ]; then echo "No SPDX header: $missing"; exit 1; fi
       - run: go vet ./...
       - name: Downloaded modules are what go.sum says
@@ -62,3 +62,34 @@ jobs:
           docker logs relay
           test "$(docker inspect -f '{{.Config.User}}' wittyrelay:ci)" = "65532:65532"
           if docker run --rm -e WITTYRELAY_ACCESS=key wittyrelay:ci; then echo "a key relay with no keys started"; exit 1; fi
+      - name: The admin page, read-only and non-root, from setup to a saved setting
+        run: bash scripts/docker-admin-check.sh wittyrelay:ci
+
+  admin-page:
+    name: admin page in a browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.27.x"
+          check-latest: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+      - name: Playwright
+        working-directory: e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Every page, sign-in, settings, keyboard, phones, dark mode, CSP
+        working-directory: e2e
+        run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: playwright-traces
+          path: e2e/test-results
+          retention-days: 7

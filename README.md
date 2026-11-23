@@ -13,6 +13,7 @@ The hosted WittyRelay is planned as a **free** service. Until then, and whenever
 - [What you need](#what-you-need)
 - [Run it with Docker Compose](#run-it-with-docker-compose)
 - [Point your server at it](#point-your-server-at-it)
+- [Admin page](#admin-page)
 - [Limits, and who sees them](#limits-and-who-sees-them)
 - [Settings](#settings)
 - [Health and metrics](#health-and-metrics)
@@ -66,9 +67,34 @@ On the server: **Settings → Remote Access → Peer-to-peer connections → You
 
 Apps need nothing: they use the relay by themselves whenever a direct connection can't be made, and show that they are.
 
+## Admin page
+
+The relay has its own web page for whoever runs it: whether it's up, how many servers and devices use it, bandwidth now and at its peak, refusals by reason, health checks and recent warnings, its limits to change, and these steps for connecting a server. It shows counts, never who uses the relay or what it carries, and never a key.
+
+![The admin page's Status](docs/images/admin-status.png)
+
+The Compose file turns it on, kept to the machine itself. Open `http://localhost:8081` there (from elsewhere, through `ssh -L 8081:localhost:8081 you@relay.example.com`), and set its password with the setup token from the log:
+
+```bash
+docker compose logs wittyrelay | grep "setup token"
+```
+
+or from the command line (this also resets a forgotten one):
+
+```bash
+docker compose exec -T wittyrelay wittyrelay admin-password <<< 'a long new password'
+```
+
+Settings saved there go to the configuration file and apply at the next restart; one set in the environment shows read-only. Everything about it, every endpoint, and its security: [docs/ADMIN.md](docs/ADMIN.md).
+
+<p>
+  <img src="docs/images/admin-settings-dark.png" alt="Settings, in the dark look" width="68%">
+  <img src="docs/images/admin-status-phone.png" alt="Status on a phone" width="28%">
+</p>
+
 ## Limits, and who sees them
 
-Every limit is told to the server **before it uses the relay** (Settings shows them under the address, in words), and to the app when it's connected through it.
+Every limit is told to the server **before it uses the relay** (Settings shows them under the address, in words), and to the app when it's connected through it. Change them on the [admin page](#admin-page) or below.
 
 | Limit | Default | Enforced by |
 |---|---|---|
@@ -84,7 +110,7 @@ Every limit is told to the server **before it uses the relay** (Settings shows t
 
 ## Settings
 
-From `docker-compose.yml`'s `environment`, or a JSON file (see [`deploy/wittyrelay.example.json`](deploy/wittyrelay.example.json)) mounted at `/config/wittyrelay.json` or named by `WITTYRELAY_CONFIG`. The environment wins over the file.
+From `docker-compose.yml`'s `environment`, or a JSON file (see [`deploy/wittyrelay.example.json`](deploy/wittyrelay.example.json)) mounted at `/config/wittyrelay.json`, named by `WITTYRELAY_CONFIG`, or `wittyrelay.json` in the data directory (where the admin page saves settings when there's no other file). The environment wins over the file.
 
 | Variable | JSON | Default | What |
 |---|---|---|---|
@@ -99,15 +125,17 @@ From `docker-compose.yml`'s `environment`, or a JSON file (see [`deploy/wittyrel
 | `WITTYRELAY_MAX_HEIGHT` | `limits.maxHeight` | 1080 | Picture height (0: any) |
 | `WITTYRELAY_DATA_MIB`, `WITTYRELAY_MINUTES` | `limits.dataMiB`, `limits.minutes` | 4096, 180 | Per connection (0: none) |
 | `WITTYRELAY_SERVERS`, `WITTYRELAY_CIRCUITS`, `WITTYRELAY_PER_IP` | `limits.servers`, `.circuits`, `.perIP` | 32, 8, 4 | |
-| `WITTYRELAY_REGISTER_PER_MINUTE`, `WITTYRELAY_DEVICES_PER_SERVER` | | 10, 512 | |
+| `WITTYRELAY_REGISTER_PER_MINUTE`, `WITTYRELAY_DEVICES_PER_SERVER` | `limits.registerPerMinute`, `.devicesPerServer` | 10, 512 | |
 | `WITTYRELAY_MEMORY_MIB` | `limits.memoryMiB` | 192 | Memory for connections and streams: a little under the container's limit |
 | `WITTYRELAY_REGISTER_TTL` | `registerTTL` | 15m | How long a registration holds unless renewed |
 | `WITTYRELAY_HTTP` | `http` | :8080 | Health and metrics ("" for none) |
 | `WITTYRELAY_METRICS_TOKEN` | `metricsToken` | none | Bearer token for `/metrics` |
 | `WITTYRELAY_METRICS_TOKEN_FILE` | | none | The same, from a file |
 | `WITTYRELAY_ALLOW_PRIVATE` | `allowPrivate` | false | Lets servers on private networks register: for a relay on a LAN, or tests |
-| `WITTYRELAY_DATA_DIR` | `dataDir` | /data | Where the relay's key is kept |
-| `WITTYRELAY_LOG_LEVEL` | `logLevel` | info | Logs are JSON lines on standard output |
+| `WITTYRELAY_DATA_DIR` | `dataDir` | /data | Where the relay's key, the admin password's hash and saved settings are kept |
+| `WITTYRELAY_LOG_LEVEL` | `logLevel` | info | `debug`, `info`, `warn` or `error`. Logs are JSON lines on standard output |
+| `WITTYRELAY_ADMIN` | `admin.listen` | off | Where the [admin page](#admin-page) listens: `127.0.0.1:8081`, or `:8081` in Docker with the port published to 127.0.0.1 |
+| `WITTYRELAY_ADMIN_HOSTS` | `admin.hosts` | none | Names the admin page may be reached by besides localhost and IP addresses: a reverse proxy's |
 
 A configuration that can't work (a `key` relay with no keys, a speed that isn't a number) stops it at start with the reason.
 
@@ -140,19 +168,22 @@ Why circuit relay v2 and not TURN: both ends already speak it, it already carrie
 - Access keys are compared in constant time and never logged. A key is a password: give each server owner their own, and take a key out of `WITTYRELAY_KEYS` to cut that owner off. Anyone who can inspect the container sees its environment: `WITTYRELAY_KEYS_FILE` with a Docker secret keeps keys out of it.
 - What it may use is fixed by its configuration, not by the machine: memory (`WITTYRELAY_MEMORY_MIB`), connections and file descriptors for the servers and circuits it allows and a margin, at most one address's share at a time (`WITTYRELAY_PER_IP` servers, each with its circuits: 36 by default; an IPv6 /56 counts as one address), and a pace for new ones. A connection that hasn't said who it is yet counts against a smaller share of its own.
 - Every message is size-checked before it is read (64 kB for a registration); registrations are rate-limited per address and per server; the tables that count them are bounded.
-- The image is distroless, runs as user 65532 with no shell, and the Compose file adds a read-only root, no capabilities and memory and process limits.
+- The image is distroless, runs as user 65532 with no shell, and the Compose file adds a read-only root, no capabilities and memory and process limits. Only the data volume is written: the key, the admin password's hash, and settings saved on the admin page.
+- The admin page is off unless turned on, kept to localhost by the Compose file, behind an argon2id-hashed password with rate-limited sign-in, `Secure` `SameSite=Strict` session cookies, CSRF tokens and a strict Content-Security-Policy, with nothing but its own embedded files. It never shows keys, tokens, addresses, or what the relay carries ([docs/ADMIN.md](docs/ADMIN.md#security)).
 - What the relay sees: both ends' IP addresses, when, and how much. Its logs keep the end of each server's ID and its IP address on registration.
 
 ## Building
 
 ```bash
-go test ./...
+go test -race ./...
 go build ./cmd/wittyrelay
 docker build -t wittyrelay .
 docker buildx build --platform linux/amd64,linux/arm64 -t wittyrelay .
 ```
 
-Go 1.27. CI runs the tests with the race detector, a minute of fuzzing, `govulncheck`, and builds and starts the image for both platforms.
+Go 1.27. CI runs the tests with the race detector, a minute of fuzzing, `govulncheck`, the admin page in a headless browser (`cd e2e && npm ci && npx playwright test`, over a made-up relay), and builds and starts the image for both platforms, then goes through the admin page in it as the Compose file runs it (`scripts/docker-admin-check.sh`).
+
+Working on the admin page: `go run ./internal/admin/uidemo` serves it over a made-up relay at `http://localhost:18081` (setup token `demo-setup-token`). The pages are Go templates in `internal/admin/web`, with one stylesheet and one small script, embedded in the binary: no build step.
 
 **Working on a Mac?** Start with WittyMediaServer's [MAC-START-HERE.md](https://github.com/wittywilla/WittyMediaServer/blob/v0.8.1-alpha/MAC-START-HERE.md): what to install, what to clone, and every Mac task in order: this repository's is item 7.9.
 

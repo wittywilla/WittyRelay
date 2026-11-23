@@ -3,6 +3,8 @@
 #   1. docker compose run --rm wittyrelay key      -> put the key below
 #   2. set WITTYRELAY_ANNOUNCE to your public name or address
 #   3. docker compose up -d && docker compose logs wittyrelay | grep "relay address"
+#   4. the admin page: http://localhost:8081 on this machine; the setup token is in
+#      docker compose logs wittyrelay | grep "setup token"
 services:
   wittyrelay:
     image: ghcr.io/wittywilla/wittyrelay:latest
@@ -12,8 +14,9 @@ services:
       - "4001:4001/udp"   # QUIC: what servers and apps use first
       - "4001:4001/tcp"   # TCP: for networks that let no UDP out
       - "127.0.0.1:8080:8080"   # health, metrics and /info: this machine only
+      - "127.0.0.1:8081:8081"   # the admin page: this machine only (an SSH tunnel reaches it from elsewhere)
     volumes:
-      - wittyrelay-data:/data   # the relay's key: keep it, servers pin its ID
+      - wittyrelay-data:/data   # the relay's key, the admin password's hash, and settings saved on the admin page
     environment:
       WITTYRELAY_NAME: "My WittyRelay"
       WITTYRELAY_NOTE: "Run by me, for my family's servers."
@@ -24,13 +27,15 @@ services:
       WITTYRELAY_KEYS: "change-me-run-wittyrelay-key"
       # Or keep keys out of the environment: a file, one key a line, as a Docker secret.
       # WITTYRELAY_KEYS_FILE: /run/secrets/wittyrelay_keys
-      # Limits, told to every server before it uses the relay.
-      WITTYRELAY_KBPS: "8000"         # per connection, each way
-      WITTYRELAY_TOTAL_KBPS: "50000"  # everything together, each way
-      WITTYRELAY_MAX_HEIGHT: "1080"   # picture size streams through it keep to
-      WITTYRELAY_DATA_MIB: "4096"     # per connection, then it starts a new one
-      WITTYRELAY_MINUTES: "180"
-      WITTYRELAY_SERVERS: "32"
+      # The admin page, inside the container. The port above keeps it to this machine.
+      # Remove this line to turn it off.
+      WITTYRELAY_ADMIN: ":8081"
+      # Limits are set on the admin page (saved in the data volume). Set one here instead
+      # and the environment wins: the admin page shows it, read-only. For example:
+      # WITTYRELAY_KBPS: "8000"         # per connection, each way
+      # WITTYRELAY_TOTAL_KBPS: "50000"  # everything together, each way
+      # WITTYRELAY_MAX_HEIGHT: "1080"   # picture size streams through it keep to
+      # WITTYRELAY_SERVERS: "32"
       WITTYRELAY_MEMORY_MIB: "192"   # a little under mem_limit below
     read_only: true
     cap_drop: [ALL]

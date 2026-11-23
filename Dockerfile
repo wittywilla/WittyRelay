@@ -8,7 +8,7 @@
 
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS build
 ARG TARGETOS TARGETARCH
-ARG VERSION=0.1.0-dev
+ARG VERSION=0.2.0-dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -24,6 +24,7 @@ COPY --from=build --chown=65532:65532 /out/data /data
 USER 65532:65532
 ENV WITTYRELAY_DATA_DIR=/data WITTYRELAY_HTTP=:8080
 VOLUME ["/data"]
-EXPOSE 4001/udp 4001/tcp 8080/tcp
+# 8081 is the admin page: off unless WITTYRELAY_ADMIN is set (README, "Admin page").
+EXPOSE 4001/udp 4001/tcp 8080/tcp 8081/tcp
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD ["/usr/local/bin/wittyrelay", "health"]
 ENTRYPOINT ["/usr/local/bin/wittyrelay"]

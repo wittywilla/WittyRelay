@@ -3,3 +3,6 @@
 *.md
 docker-compose.yml
 deploy
+e2e
+docs
+scripts

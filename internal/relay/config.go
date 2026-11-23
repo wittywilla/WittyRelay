@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -47,12 +49,25 @@ type Config struct {
 	MetricsToken string `json:"metricsToken"`
 	// LogLevel: debug | info | warn | error.
 	LogLevel string `json:"logLevel"`
+	// Admin is the relay's own web page for whoever runs it (README, "Admin page").
+	Admin Admin `json:"admin"`
 
 	// For tests: how long a registration may take (registerWait otherwise),
 	// and what is shown every piece passed on (what an operator could see
 	// on the wire, to prove it is only ciphertext).
 	registerWait time.Duration
 	tap          func([]byte)
+}
+
+// Admin is where the admin page is served. It is off unless Listen is set.
+type Admin struct {
+	// Listen is a host:port, such as "127.0.0.1:8081" ("" for off). In Docker
+	// it is ":8081", published to 127.0.0.1 on the host only.
+	Listen string `json:"listen"`
+	// Hosts are names the page may be reached by besides localhost and IP
+	// addresses: a reverse proxy's name. Anything else is refused, against
+	// DNS rebinding.
+	Hosts []string `json:"hosts"`
 }
 
 // Limits are what the relay allows. Every one is told to servers before use.
@@ -110,14 +125,33 @@ func Default() Config {
 	}
 }
 
+// ConfigPath is the configuration file: WITTYRELAY_CONFIG, or
+// /config/wittyrelay.json if it exists, or wittyrelay.json in the data
+// directory (where the admin page saves settings when there is no other
+// file). exists says whether it is there yet.
+func ConfigPath() (path string, exists bool) {
+	if p := strings.TrimSpace(os.Getenv("WITTYRELAY_CONFIG")); p != "" {
+		_, err := os.Stat(p)
+		return p, err == nil
+	}
+	if _, err := os.Stat("/config/wittyrelay.json"); err == nil {
+		return "/config/wittyrelay.json", true
+	}
+	dir := strings.TrimSpace(os.Getenv("WITTYRELAY_DATA_DIR"))
+	if dir == "" {
+		dir = Default().DataDir
+	}
+	p := filepath.Join(dir, "wittyrelay.json")
+	_, err := os.Stat(p)
+	return p, err == nil
+}
+
 // Load reads the file (if any) and the environment.
 func Load() (Config, error) {
 	c := Default()
-	path := os.Getenv("WITTYRELAY_CONFIG")
-	if path == "" {
-		if _, err := os.Stat("/config/wittyrelay.json"); err == nil {
-			path = "/config/wittyrelay.json"
-		}
+	path, exists := ConfigPath()
+	if os.Getenv("WITTYRELAY_CONFIG") == "" && !exists {
+		path = ""
 	}
 	if path != "" {
 		b, err := os.ReadFile(path)
@@ -196,6 +230,8 @@ func (c *Config) fromEnv(get func(string) string) error {
 	})
 	secret("WITTYRELAY_METRICS_TOKEN_FILE", func(v string) { c.MetricsToken = v })
 	str("WITTYRELAY_LOG_LEVEL", &c.LogLevel)
+	str("WITTYRELAY_ADMIN", &c.Admin.Listen)
+	list("WITTYRELAY_ADMIN_HOSTS", &c.Admin.Hosts)
 	if v, ok := lookup(get, "WITTYRELAY_ALLOW_PRIVATE"); ok {
 		c.AllowPrivate = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
 	}
@@ -302,6 +338,18 @@ func (c *Config) Check() error {
 	}
 	if len(c.Name) > 60 || len(c.Note) > 280 {
 		add("name is at most 60 characters and note at most 280")
+	}
+	switch strings.ToLower(c.LogLevel) {
+	case "", "debug", "info", "warn", "error":
+	default:
+		add("logLevel must be debug, info, warn or error, not %q", c.LogLevel)
+	}
+	if c.Admin.Listen != "" {
+		if _, _, err := net.SplitHostPort(c.Admin.Listen); err != nil {
+			add("admin listen %q is not a host:port, such as 127.0.0.1:8081", c.Admin.Listen)
+		} else if c.Admin.Listen == c.HTTP {
+			add("the admin page needs a port of its own, not the health and metrics one")
+		}
 	}
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))
