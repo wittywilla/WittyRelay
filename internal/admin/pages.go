@@ -232,29 +232,48 @@ type server struct {
 	Renews  string `json:"renews"`
 }
 
+// limitRow is one per-network limit: what it allows, the busiest network
+// or address now, and how many are at the limit. Numbers only.
+type limitRow struct {
+	Label   string `json:"label"`
+	Allowed string `json:"allowed"`
+	Busiest string `json:"busiest"`
+	AtLimit string `json:"atLimit"`
+}
+
 type statusView struct {
-	Up          bool      `json:"up"`
-	State       string    `json:"state"`
-	Version     string    `json:"version"`
-	Uptime      string    `json:"uptime"`
-	Started     string    `json:"started"`
-	Servers     string    `json:"servers"`
-	ServersMax  string    `json:"serversMax"`
-	Places      string    `json:"places"`
-	Circuits    string    `json:"circuits"`
-	CircuitsMax string    `json:"circuitsMax"`
-	Opened      string    `json:"opened"`
-	PerMinute   string    `json:"perMinute"`
-	Now         string    `json:"now"`
-	Peak        string    `json:"peak"`
-	PeakAt      string    `json:"peakAt"`
-	Cap         string    `json:"cap"`
-	Relayed     string    `json:"relayed"`
-	Spark       string    `json:"spark"`
-	SparkTop    string    `json:"sparkTop"`
-	LimitsHit   string    `json:"limitsHit"`
-	Refused     []refusal `json:"refused"`
-	Registered  []server  `json:"registered"`
+	Up bool `json:"up"`
+	// Health is what servers are told (relay.Health), in words.
+	Health      string     `json:"health"`
+	HealthState string     `json:"healthState"`
+	HealthLoad  string     `json:"healthLoad"`
+	HealthNote  string     `json:"healthNote"`
+	Conns       string     `json:"conns"`
+	ConnsMax    string     `json:"connsMax"`
+	ConnsDetail string     `json:"connsDetail"`
+	Memory      string     `json:"memory"`
+	Limits      []limitRow `json:"limits"`
+	State       string     `json:"state"`
+	Version     string     `json:"version"`
+	Uptime      string     `json:"uptime"`
+	Started     string     `json:"started"`
+	Servers     string     `json:"servers"`
+	ServersMax  string     `json:"serversMax"`
+	Places      string     `json:"places"`
+	Circuits    string     `json:"circuits"`
+	CircuitsMax string     `json:"circuitsMax"`
+	Opened      string     `json:"opened"`
+	PerMinute   string     `json:"perMinute"`
+	Now         string     `json:"now"`
+	Peak        string     `json:"peak"`
+	PeakAt      string     `json:"peakAt"`
+	Cap         string     `json:"cap"`
+	Relayed     string     `json:"relayed"`
+	Spark       string     `json:"spark"`
+	SparkTop    string     `json:"sparkTop"`
+	LimitsHit   string     `json:"limitsHit"`
+	Refused     []refusal  `json:"refused"`
+	Registered  []server   `json:"registered"`
 }
 
 // refusalLabels say what each refusal reason means to whoever runs the relay.
@@ -321,6 +340,16 @@ func (s *Server) statusView() statusView {
 		v.Refused = append(v.Refused, refusal{Label: label, Count: num(n)})
 	}
 	v.LimitsHit = num(hit)
+	v.Health, v.HealthNote = healthWords(snap.Health.State)
+	v.HealthState, v.HealthLoad = snap.Health.State, strconv.Itoa(snap.Health.Load)+"%"
+	c := snap.Conns
+	v.Conns, v.ConnsMax = num(int64(c.Open)), num(int64(c.Budget))
+	v.ConnsDetail = fmt.Sprintf("%s in, %s out; %s still saying who they are (of %s)",
+		num(int64(c.Inbound)), num(int64(c.Outbound)), num(int64(c.Unidentified)), num(int64(c.UnidentifiedMax)))
+	if c.MemoryMax > 0 {
+		v.Memory = fmt.Sprintf("%.1f MiB of %d MiB", c.MemoryMiB, c.MemoryMax)
+	}
+	v.Limits = limitRows(snap.Networks, snap.Refused["busy"])
 	for _, r := range snap.Registered {
 		v.Registered = append(v.Registered, server{ID: r.ID, Devices: num(int64(r.Devices)), Renews: fmtDur(r.Until.Sub(now))})
 	}
@@ -411,6 +440,12 @@ func (s *Server) healthPage(w http.ResponseWriter, r *http.Request) {
 		checks = append(checks, check{"info", "No public address set", "Fine for a relay on a home or office network. For the internet, set WITTYRELAY_ANNOUNCE."})
 	default:
 		checks = append(checks, check{"warn", "No public address set", "Set WITTYRELAY_ANNOUNCE to your domain or public IP. Without it servers are told what this machine sees, which in Docker or behind a router is a private address."})
+	}
+	switch word, note := healthWords(snap.Health.State); snap.Health.State {
+	case "ok":
+		checks = append(checks, check{"ok", "Servers are told: " + word, fmt.Sprintf("Load %d%%. %s", snap.Health.Load, note)})
+	case "busy", "full":
+		checks = append(checks, check{"warn", "Servers are told: " + word, fmt.Sprintf("Load %d%%. %s Raise the limits in Settings if this machine has room.", snap.Health.Load, note)})
 	}
 	if c.Access == "open" {
 		checks = append(checks, check{"info", "Open to any server", "Any server may register. Each is still limited, and only reaches devices it lists."})
@@ -821,4 +856,37 @@ func fmtDur(d time.Duration) string {
 		return fmt.Sprintf("%d h %d min", int(d.Hours()), int(d.Minutes())%60)
 	}
 	return fmt.Sprintf("%d days %d h", int(d.Hours())/24, int(d.Hours())%24)
+}
+
+// healthWords say what each health state means, as the status page shows it.
+func healthWords(state string) (word, note string) {
+	switch state {
+	case "ok":
+		return "OK", "Room for more servers and connections."
+	case "busy":
+		return "Busy", "Most of what the relay allows is in use. Servers are told it's busy."
+	case "full":
+		return "Full", "No more servers can register. Those registered keep their place."
+	case "starting":
+		return "Starting", "The relay isn't listening yet."
+	}
+	return state, ""
+}
+
+// limitRows are the per-network limits, with the busiest network or address
+// now. busy is how many registrations were refused for coming too often.
+func limitRows(n relay.NetworkUse, busy int64) []limitRow {
+	of := func(at, with int, what string) string {
+		return fmt.Sprintf("%s of %s %s", num(int64(at)), num(int64(with)), what)
+	}
+	return []limitRow{
+		{Label: "Servers from one network (an IPv4 address, or an IPv6 /64)", Allowed: num(int64(n.ServersMax)),
+			Busiest: num(int64(n.BusiestServers)), AtLimit: of(n.ServersAtMax, n.WithServers, "networks with servers")},
+		{Label: "Connections from one address (an IPv4 address, or an IPv6 /56)", Allowed: num(int64(n.ConnsMax)),
+			Busiest: num(int64(n.BusiestConns)), AtLimit: of(n.ConnsAtMax, n.WithConns, "addresses connected")},
+		{Label: "Registrations from one network a minute", Allowed: num(int64(n.RegisterPerMinute)),
+			Busiest: "–", AtLimit: num(busy) + " refused since start"},
+		{Label: "New connections from one address", Allowed: fmt.Sprintf("%s at once, then %d a second", num(int64(n.NewConnBurst)), n.NewConnPerSec),
+			Busiest: "–", AtLimit: "–"},
+	}
 }

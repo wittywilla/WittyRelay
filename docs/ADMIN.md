@@ -47,7 +47,7 @@ The password is kept as an **argon2id** hash (19 MiB, 2 passes, a random salt) i
 
 | Page | What |
 |---|---|
-| **Status** | Up or not, version, uptime; servers registered and places held; device connections open, in the last minute and since start; bandwidth now and its peak; a graph of the last ten minutes; refusals by reason ("limits hit"); registered servers by short ID, with how many devices each listed and when it renews |
+| **Status** | Up or not, version, uptime; servers registered and places held; device connections open, in the last minute and since start; bandwidth now and its peak; a graph of the last ten minutes; refusals by reason ("limits hit"); registered servers by short ID, with how many devices each listed and when it renews; the health servers are told (OK, Busy, Full or Starting, and the load); every connection open, in and out and still saying who it is, against the relay's budget, with memory in use; and **Limits per network**: servers from one network, connections from one address, registrations a minute and the pace of new connections, each with the busiest network or address now and how many are at the limit. Those are counted from addresses held in memory, and only the numbers reach the page |
 | **Health** | Checks (listening, public address, access, whether settings can be saved, a restart waiting, recent warnings); the public addresses with Copy buttons; the ports and who they should be open to; the last 50 warnings and errors |
 | **Settings** | Bandwidth caps, connection limits, per-address limits, the name and note servers are shown, the log level; the admin password |
 | **Connect a server** | The steps: ports to open, access keys, where to paste the address on a WittyMediaServer, how to check it worked; the relay's addresses; a `docker-compose.yml` to start from |
@@ -105,7 +105,7 @@ On the admin listener only (not on the health and metrics port). Every response 
 | `GET /settings` | session | The Settings page |
 | `POST /settings` | session, CSRF | The settings' fields by their JSON names (`kbps`, `totalKbps`, `maxHeight`, `dataMiB`, `minutes`, `servers`, `circuits`, `devicesPerServer`, `perIP`, `registerPerMinute`, `name`, `note`, `logLevel`). 303 to `/settings?saved=1` (or `saved=now` when nothing waits for a restart); 422 a value the relay wouldn't run with; 409 the file can't be written |
 | `POST /password` | session, CSRF; rate-limited | `current`, `password`, `again`. 303 to `/settings?password=1`; 401 wrong current password; 422; 429 |
-| `GET /api/status` | session | Status as JSON, already formatted for the page: `up`, `state`, `version`, `uptime`, `servers`, `serversMax`, `places`, `circuits`, `opened`, `perMinute`, `now`, `peak`, `peakAt`, `cap`, `relayed`, `spark` (graph points), `limitsHit`, `refused` [`label`, `count`], `registered` [`id`, `devices`, `renews`]. 401 without a session |
+| `GET /api/status` | session | Status as JSON, already formatted for the page: `up`, `state`, `version`, `uptime`, `servers`, `serversMax`, `places`, `circuits`, `opened`, `perMinute`, `now`, `peak`, `peakAt`, `cap`, `relayed`, `spark` (graph points), `limitsHit`, `refused` [`label`, `count`], `registered` [`id`, `devices`, `renews`], `health`, `healthState`, `healthLoad`, `healthNote`, `conns`, `connsMax`, `connsDetail`, `memory`, `limits` [`label`, `allowed`, `busiest`, `atLimit`]. 401 without a session |
 | `GET /assets/app.css`, `/assets/app.js`, `/assets/icon.svg` | | The embedded stylesheet, script and icon |
 | `GET /favicon.ico` | | 301 to the icon |
 

@@ -17,7 +17,7 @@ import (
 //	GET /healthz  200 while the process runs
 //	GET /readyz   200 once listening
 //	GET /metrics  Prometheus text (a bearer token if MetricsToken is set)
-//	GET /info     the offer and the relay's addresses, as JSON
+//	GET /info     the offer, with the relay's health now, and its addresses, as JSON
 func (r *Relay) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -43,11 +43,12 @@ func (r *Relay) Handler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		r.m.write(w)
+		r.writeHealth(w)
 	})
 	mux.HandleFunc("GET /info", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": r.ID(), "addresses": r.Addrs(), "offer": r.offer})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": r.ID(), "addresses": r.Addrs(), "offer": r.currentOffer()})
 	})
 	return mux
 }

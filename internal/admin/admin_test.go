@@ -581,6 +581,39 @@ func TestStatusAPI(t *testing.T) {
 	}
 }
 
+func TestStatusShowsHealthConnectionsAndNetworkLimits(t *testing.T) {
+	hz := newHarness(t)
+	tok, _ := hz.setup()
+	res := hz.do(req{method: "GET", path: "/api/status", cookies: map[string]string{cookieSession: tok}})
+	var v statusView
+	if err := json.NewDecoder(res.Body).Decode(&v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Health != "OK" || v.HealthState != "ok" || v.HealthLoad != "40%" || v.Conns != "13" || v.ConnsMax != "352" ||
+		!strings.Contains(v.ConnsDetail, "13 in") || v.Memory != "9.4 MiB of 192 MiB" || len(v.Limits) != 4 {
+		t.Fatalf("status: %+v", v)
+	}
+	if l := v.Limits[0]; l.Allowed != "4" || l.Busiest != "2" || l.AtLimit != "0 of 4 networks with servers" {
+		t.Fatalf("servers per network: %+v", l)
+	}
+	if l := v.Limits[1]; l.Allowed != "36" || l.Busiest != "5" || l.AtLimit != "0 of 9 addresses connected" {
+		t.Fatalf("connections per address: %+v", l)
+	}
+	if l := v.Limits[2]; l.Allowed != "10" || l.AtLimit != "4 refused since start" {
+		t.Fatalf("registrations a minute: %+v", l)
+	}
+	page := text(hz.do(req{method: "GET", path: "/status", cookies: map[string]string{cookieSession: tok}}))
+	for _, want := range []string{"Health servers see", `data-health="ok"`, "All connections", "Limits per network", "36 at once, then 2 a second"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("the status page lacks %q", want)
+		}
+	}
+	page = text(hz.do(req{method: "GET", path: "/health", cookies: map[string]string{cookieSession: tok}}))
+	if !strings.Contains(page, "Servers are told: OK") {
+		t.Fatal("the health page doesn't say what servers are told")
+	}
+}
+
 func TestFormatting(t *testing.T) {
 	for in, want := range map[float64]string{0: "0 Mbit/s", 850e3: "850 kbit/s", 12.4e6: "12.4 Mbit/s", 30e6: "30 Mbit/s", 1.25e9: "1.25 Gbit/s"} {
 		if got := fmtBits(in); got != want {

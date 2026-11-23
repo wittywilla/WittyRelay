@@ -11,6 +11,11 @@
     <p class="muted">Version <span data-k="version">{{.Version}}</span>, up <span data-k="uptime">{{.Uptime}}</span></p>
   </article>
   <article class="tile">
+    <h2>Health servers see</h2>
+    <p class="big"><span class="health" data-health="{{.HealthState}}" data-k="health">{{.Health}}</span> <small>load <span data-k="healthLoad">{{.HealthLoad}}</span></small></p>
+    <p class="muted" data-k="healthNote">{{.HealthNote}}</p>
+  </article>
+  <article class="tile">
     <h2>Servers registered</h2>
     <p class="big"><span data-k="servers">{{.Servers}}</span> <small>of <span data-k="serversMax">{{.ServersMax}}</span></small></p>
     <p class="muted"><span data-k="places">{{.Places}}</span> holding a place now</p>
@@ -19,6 +24,11 @@
     <h2>Device connections</h2>
     <p class="big"><span data-k="circuits">{{.Circuits}}</span> <small>open</small></p>
     <p class="muted"><span data-k="perMinute">{{.PerMinute}}</span> in the last minute, <span data-k="opened">{{.Opened}}</span> since start</p>
+  </article>
+  <article class="tile">
+    <h2>All connections</h2>
+    <p class="big"><span data-k="conns">{{.Conns}}</span> <small>of <span data-k="connsMax">{{.ConnsMax}}</span></small></p>
+    <p class="muted"><span data-k="connsDetail">{{.ConnsDetail}}</span>{{if .Memory}}. Memory <span data-k="memory">{{.Memory}}</span>{{end}}</p>
   </article>
   <article class="tile">
     <h2>Bandwidth now</h2>
@@ -43,6 +53,19 @@
       <polyline class="spark-line" data-spark points="{{.Spark}}"/>
     </svg>
     <p class="spark-top muted" id="bw-top">Top of the graph: <span data-k="sparkTop">{{.SparkTop}}</span></p>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="net-title">
+  <h2 id="net-title">Limits per network</h2>
+  <p class="muted small">So one home, office or phone network can't take the whole relay. Counted from addresses the relay holds in memory only: this page and the log show numbers, never addresses.</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th scope="col">Limit</th><th scope="col" class="num">Allowed</th><th scope="col" class="num">Busiest now</th><th scope="col" class="num">At the limit now</th></tr></thead>
+      <tbody data-rows="limits" data-cols="label allowed busiest atLimit" data-empty="">
+        {{range .Limits}}<tr><td>{{.Label}}</td><td class="num">{{.Allowed}}</td><td class="num">{{.Busiest}}</td><td class="num">{{.AtLimit}}</td></tr>{{end}}
+      </tbody>
+    </table>
   </div>
 </section>
 

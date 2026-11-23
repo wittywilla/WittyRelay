@@ -11,6 +11,8 @@
   - **Connect a server:** ports to open, keys, where to paste the address on a WittyMediaServer, and a `docker-compose.yml`.
   - The first password is set with a one-time setup token from the log, or with `wittyrelay admin-password`. It's kept as an argon2id hash. Sign-in is rate-limited; sessions are `Secure`, `HttpOnly`, `SameSite=Strict` cookies; every form has a CSRF token; the Content-Security-Policy allows only the page's own embedded files.
   - Light and dark, following the device, in WittyMediaServer's colours; fits a phone; labelled for screen readers and usable from the keyboard.
+- **Relay health, told to servers.** The offer now carries `health`: `state` (`ok`, `busy`, `full` or `starting`) and `load`, the fullest of servers, device connections, all connections and bandwidth, rounded to 10%. It comes with relay-info, every registration and `/info`, so a server's remote access screen can show how its relay is doing. Coarse on purpose: anyone who reaches the relay may ask. `/metrics` adds `wittyrelay_load_percent`, `wittyrelay_connections` and `wittyrelay_bandwidth_bits`.
+- **Status shows live connections and the per-network limits:** what servers are told about health; every connection open (in, out, and still saying who they are) against the relay's budget, and memory in use; and for each per-network limit, what it allows, the busiest network or address now, and how many are at the limit. Counted from addresses held in memory only: the page and the log get numbers.
 - `wittyrelay admin-password` sets the admin page's password from standard input.
 - The configuration file can also be `wittyrelay.json` in the data directory.
 

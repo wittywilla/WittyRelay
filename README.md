@@ -147,7 +147,7 @@ On port 8080, which the Compose file opens to the machine itself only:
 |---|---|
 | `/healthz` | 200 while it runs |
 | `/readyz` | 200 once it listens; Docker's health check |
-| `/info` | The relay's ID, addresses and limits (nothing secret) |
+| `/info` | The relay's ID, addresses, limits and health (nothing secret) |
 | `/metrics` | Prometheus: servers, places held, connections open and total, bytes passed on, refusals by reason |
 
 ## How it works
@@ -158,6 +158,7 @@ WittyRelay is that relay with what a relay for other people needs:
 
 - **Registration** (`/wittyrelay/register/1.0.0`). A server proves who it is (libp2p does that on every connection), shows an access key if the relay needs one, and lists the devices that may reach it. Only a registered server holds a place, and only a listed device reaches it. The list is the server's word: renewed every five minutes, forgotten fifteen minutes after it was last heard, so a device removed on the server loses the relay too.
 - **Limits said first** (`/wittymedia/relay-info/1.0.0`). Any node can ask what the relay allows, and a registration's answer carries the same.
+- **Health said too.** The same answer carries `health`: `{"state": "ok" | "busy" | "full" | "starting", "load": 0–100}`, the load rounded to 10%. A server shows it on its remote access screen; `busy` means most of what the relay allows is in use, `full` that it takes no new servers (registered ones keep their place). It says how full the relay is, never who uses it.
 - **Speed limits** per connection and in all, on top of libp2p's limits on time and data.
 
 Why circuit relay v2 and not TURN: both ends already speak it, it already carries the encrypted libp2p connection unchanged, and the apps already switch from a relay to a direct connection the moment one can be made. TURN would mean a second way of connecting in every app, with its own credentials, for the same result.

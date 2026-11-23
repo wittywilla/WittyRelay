@@ -59,6 +59,9 @@ type Relay struct {
 	reg   *registry
 	m     *metrics
 	offer Offer
+	rm    network.ResourceManager
+	bw    meter
+	hc    healthCache
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -155,6 +158,7 @@ func Start(cfg Config, key crypto.PrivKey, log *slog.Logger) (*Relay, error) {
 		}
 		opts = append(opts, libp2p.AddrsFactory(func([]ma.Multiaddr) []ma.Multiaddr { return announce }))
 	}
+	r.rm = rm
 	h, err := libp2p.New(opts...)
 	if err != nil {
 		cancel()
@@ -283,13 +287,13 @@ func (r *Relay) Addrs() []string {
 	return out
 }
 
-// Offer is what the relay allows.
-func (r *Relay) Offer() Offer { return r.offer }
+// Offer is what the relay allows, with its health now.
+func (r *Relay) Offer() Offer { return r.currentOffer() }
 
 func (r *Relay) handleInfo(s network.Stream) {
 	defer s.Close()
 	_ = s.SetDeadline(time.Now().Add(10 * time.Second))
-	_ = writeMessage(s, r.offer, maxAnswer)
+	_ = writeMessage(s, r.currentOffer(), maxAnswer)
 }
 
 // registerWait is the most a registration may take, however slowly it is
@@ -313,7 +317,7 @@ func (r *Relay) handleRegister(s network.Stream) {
 	} else {
 		res = r.reg.register(server, ip, req)
 	}
-	res.Offer = r.offer
+	res.Offer = r.currentOffer()
 	if res.OK {
 		r.m.registered.Add(1)
 		r.log.Debug("server registered", "server", short(server.String()), "name", req.Name, "devices", len(req.Devices), "from", ip.String())
@@ -323,16 +327,21 @@ func (r *Relay) handleRegister(s network.Stream) {
 	_ = writeMessage(s, res, maxAnswer)
 }
 
-// expire forgets registrations nobody renewed, and cuts off their places.
+// expire forgets registrations nobody renewed, and cuts off their places,
+// every 30 seconds, and measures bandwidth every 5.
 func (r *Relay) expire() {
-	t := time.NewTicker(30 * time.Second)
+	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
-	for {
+	r.bw.sample(r.m.bytes.Load(), time.Now())
+	for i := 1; ; i++ {
 		select {
 		case <-r.ctx.Done():
 			return
-		case <-t.C:
-			r.reg.count()
+		case now := <-t.C:
+			r.bw.sample(r.m.bytes.Load(), now)
+			if i%6 == 0 {
+				r.reg.count()
+			}
 		}
 	}
 }
