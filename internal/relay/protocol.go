@@ -39,6 +39,8 @@ type Offer struct {
 	Minutes   int    `json:"minutes,omitempty"`
 	Servers   int    `json:"servers,omitempty"`
 	Circuits  int    `json:"circuits,omitempty"`
+	// Health is how the relay is doing now. Not in OfferOf: it changes.
+	Health *Health `json:"health,omitempty"`
 }
 
 // RegisterRequest is what a server sends.

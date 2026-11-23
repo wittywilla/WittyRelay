@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"maps"
+	"net/netip"
 	"sort"
 	"time"
 )
@@ -33,6 +34,11 @@ type Snapshot struct {
 	Refused       map[string]int64
 
 	Registered []Registered
+
+	Health   Health     // what servers are told
+	Conns    ConnUse    // every connection, against what is allowed
+	Networks NetworkUse // per-network limits, and the busiest network
+	BPS      int64      // bandwidth now, bits a second, both ways
 }
 
 // Registered is one registered server as the admin page shows it: a short ID
@@ -62,7 +68,7 @@ func anonID(s string) string {
 func (r *Relay) Snapshot() Snapshot {
 	m := r.m
 	s := Snapshot{Version: Version, ID: r.ID(), Ready: r.Ready(), Started: m.start, Addrs: r.Addrs(),
-		Port: r.cfg.Port, Offer: r.offer,
+		Port: r.cfg.Port, Offer: r.offer, BPS: r.bw.bps.Load(),
 		Servers: m.servers.Load(), Reservations: m.reservations.Load(), Circuits: m.circuits.Load(),
 		CircuitsTotal: m.circuitsAll.Load(), BytesTotal: m.bytes.Load(), Registrations: m.registered.Load()}
 	m.mu.Lock()
@@ -78,6 +84,10 @@ func (r *Relay) Snapshot() Snapshot {
 		s.Registered = append(s.Registered, Registered{ID: anonID(id.String()), Devices: len(reg.devices), Until: reg.until})
 	}
 	r.reg.mu.Unlock()
+	var per map[netip.Prefix]int
+	s.Conns, per = r.connUse()
+	s.Networks = r.networkUse(per)
+	s.Health = r.health(s.Conns.Open)
 	sort.Slice(s.Registered, func(i, j int) bool { return s.Registered[i].ID < s.Registered[j].ID })
 	return s
 }

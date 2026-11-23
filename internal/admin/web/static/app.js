@@ -66,6 +66,7 @@
         if (typeof v === 'string' && el.textContent !== v) el.textContent = v
       }
       for (const el of document.querySelectorAll('[data-state]')) el.dataset.state = d.up ? 'up' : 'down'
+      for (const el of document.querySelectorAll('[data-health]')) el.dataset.health = d.healthState
       document.querySelector('[data-spark]').setAttribute('points', d.spark)
       for (const tb of document.querySelectorAll('tbody[data-rows]')) rows(tb, d[tb.dataset.rows] || [])
       failed = 0

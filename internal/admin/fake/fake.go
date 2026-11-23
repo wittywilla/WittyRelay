@@ -63,5 +63,9 @@ func (f *Relay) Snapshot() relay.Snapshot {
 	return relay.Snapshot{Version: relay.Version, ID: id, Ready: true, Started: f.start, Port: 4001, Offer: f.Offer,
 		Addrs:   []string{"/dns4/relay.example.com/udp/4001/quic-v1/p2p/" + id, "/dns4/relay.example.com/tcp/4001/p2p/" + id},
 		Servers: 5, Reservations: 5, Circuits: 7, CircuitsTotal: f.opened, BytesTotal: int64(f.bytes), Registrations: 9120,
-		Refused: refused, Registered: reg}
+		Refused: refused, Registered: reg,
+		Health: relay.Health{State: "ok", Load: 40},
+		Conns:  relay.ConnUse{Open: 13, Inbound: 13, Budget: 352, UnidentifiedMax: 88, MemoryMiB: 9.4, MemoryMax: 192},
+		Networks: relay.NetworkUse{ServersMax: 4, WithServers: 4, BusiestServers: 2, ConnsMax: 36, WithConns: 9,
+			BusiestConns: 5, RegisterPerMinute: 10, NewConnBurst: 36, NewConnPerSec: 2}}
 }
