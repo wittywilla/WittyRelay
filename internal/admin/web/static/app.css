@@ -90,7 +90,7 @@ body {
 h1, h2, h3 { font-weight: var(--weight-heading); letter-spacing: var(--tracking-heading); line-height: 1.2; margin: 0; }
 h1 { font-size: var(--page-title); }
 h2 { font-size: var(--text-lg); }
-p { margin: 0; }
+p { margin: 0; overflow-wrap: break-word; }
 a { color: var(--accent-text); text-underline-offset: 2px; }
 code, pre { font-family: var(--font-mono); font-size: .92em; }
 code { overflow-wrap: anywhere; }
@@ -166,6 +166,7 @@ main:focus { outline: none; }
 .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .check { display: flex; gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
 .check:last-child { border-bottom: 0; }
+.check > div { min-width: 0; overflow-wrap: anywhere; }
 .check p { color: var(--fg-2); font-size: var(--text-md); margin-top: 2px; }
 .dot { flex: none; width: 12px; height: 12px; margin-top: 6px; border-radius: 50%; background: var(--fg-3); }
 .check[data-state="ok"] .dot { background: var(--ok); }

@@ -1,0 +1,13 @@
+{
+  "name": "wittyrelay-e2e",
+  "private": true,
+  "description": "Headless browser test of WittyRelay's admin page, over a made-up relay (internal/admin/uidemo).",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}

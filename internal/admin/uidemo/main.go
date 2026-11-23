@@ -68,7 +68,8 @@ func main() {
 	cfg.Admin.Listen = *listen
 	if _, err := os.Stat(cfgPath); err != nil {
 		b, _ := json.MarshalIndent(cfg, "", "  ")
-		if err := os.MkdirAll(*dir, 0o700); err == nil {
+		err := os.MkdirAll(*dir, 0o700)
+		if err == nil {
 			err = os.WriteFile(cfgPath, b, 0o600)
 		}
 		if err != nil {
