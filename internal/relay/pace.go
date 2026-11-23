@@ -70,9 +70,13 @@ type pacedStream struct {
 	ctx         context.Context
 	own, shared *bucket
 	m           *metrics
+	tap         func([]byte)
 }
 
 func (s *pacedStream) Write(b []byte) (int, error) {
+	if s.tap != nil {
+		s.tap(b)
+	}
 	done := 0
 	for done < len(b) {
 		n := min(len(b)-done, 16<<10)
@@ -95,10 +99,11 @@ type pacingHost struct {
 	kbps   int
 	shared *bucket
 	m      *metrics
+	tap    func([]byte)
 }
 
 func (h *pacingHost) pace(s network.Stream) network.Stream {
-	return &pacedStream{Stream: s, ctx: h.ctx, own: newBucket(h.kbps), shared: h.shared, m: h.m}
+	return &pacedStream{Stream: s, ctx: h.ctx, own: newBucket(h.kbps), shared: h.shared, m: h.m, tap: h.tap}
 }
 
 // SetStreamHandler paces the hop streams devices and servers open.

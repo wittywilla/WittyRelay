@@ -47,6 +47,12 @@ type Config struct {
 	MetricsToken string `json:"metricsToken"`
 	// LogLevel: debug | info | warn | error.
 	LogLevel string `json:"logLevel"`
+
+	// For tests: how long a registration may take (registerWait otherwise),
+	// and what is shown every piece passed on (what an operator could see
+	// on the wire, to prove it is only ciphertext).
+	registerWait time.Duration
+	tap          func([]byte)
 }
 
 // Limits are what the relay allows. Every one is told to servers before use.
@@ -63,6 +69,10 @@ type Limits struct {
 	RegisterPerMinute int `json:"registerPerMinute"`
 	// DevicesPerServer is the most devices one registration may list.
 	DevicesPerServer int `json:"devicesPerServer"`
+	// MemoryMiB is what the relay may use for connections and streams: set it
+	// a little under the container's memory limit. libp2p would otherwise size
+	// itself from the whole machine's memory, which a container doesn't have.
+	MemoryMiB int `json:"memoryMiB"`
 }
 
 // Duration reads "15m" as well as a number of seconds.
@@ -94,7 +104,7 @@ func Default() Config {
 		DataDir: "/data",
 		Access:  "key",
 		Limits: Limits{Kbps: 8000, TotalKbps: 50000, MaxHeight: 1080, DataMiB: 4096, Minutes: 180,
-			Servers: 32, Circuits: 8, PerIP: 4, RegisterPerMinute: 10, DevicesPerServer: 512},
+			Servers: 32, Circuits: 8, PerIP: 4, RegisterPerMinute: 10, DevicesPerServer: 512, MemoryMiB: 192},
 		RegisterTTL: Duration(15 * time.Minute),
 		LogLevel:    "info",
 	}
@@ -163,6 +173,28 @@ func (c *Config) fromEnv(get func(string) string) error {
 	str("WITTYRELAY_ACCESS", &c.Access)
 	list("WITTYRELAY_KEYS", &c.Keys)
 	str("WITTYRELAY_METRICS_TOKEN", &c.MetricsToken)
+	// Secrets can come from files instead (Docker secrets, a mounted file):
+	// what is in the environment shows to anyone who can inspect the container.
+	var unreadable []string
+	secret := func(name string, apply func(string)) {
+		if p, ok := lookup(get, name); ok {
+			b, err := readSecretFile(p)
+			if err != nil {
+				unreadable = append(unreadable, name)
+				return
+			}
+			apply(strings.TrimSpace(string(b)))
+		}
+	}
+	secret("WITTYRELAY_KEYS_FILE", func(v string) {
+		c.Keys = nil
+		for _, p := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == '\n' || r == '\r' }) {
+			if p = strings.TrimSpace(p); p != "" {
+				c.Keys = append(c.Keys, p)
+			}
+		}
+	})
+	secret("WITTYRELAY_METRICS_TOKEN_FILE", func(v string) { c.MetricsToken = v })
 	str("WITTYRELAY_LOG_LEVEL", &c.LogLevel)
 	if v, ok := lookup(get, "WITTYRELAY_ALLOW_PRIVATE"); ok {
 		c.AllowPrivate = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
@@ -188,11 +220,18 @@ func (c *Config) fromEnv(get func(string) string) error {
 	num("WITTYRELAY_PER_IP", &l.PerIP)
 	num("WITTYRELAY_REGISTER_PER_MINUTE", &l.RegisterPerMinute)
 	num("WITTYRELAY_DEVICES_PER_SERVER", &l.DevicesPerServer)
+	num("WITTYRELAY_MEMORY_MIB", &l.MemoryMiB)
+	if len(unreadable) > 0 {
+		return fmt.Errorf("couldn't read the file named by %s", strings.Join(unreadable, ", "))
+	}
 	if len(bad) > 0 {
 		return fmt.Errorf("not a number: %s", strings.Join(bad, ", "))
 	}
 	return nil
 }
+
+// readSecretFile reads a file named by a *_FILE variable. A variable for tests.
+var readSecretFile = os.ReadFile
 
 func lookup(get func(string) string, name string) (string, bool) {
 	v := strings.TrimSpace(get(name))
@@ -254,6 +293,9 @@ func (c *Config) Check() error {
 	}
 	if l.DevicesPerServer < 1 || l.DevicesPerServer > 1024 {
 		add("devicesPerServer should be between 1 and 1024")
+	}
+	if l.MemoryMiB < 64 || l.MemoryMiB > 1<<20 {
+		add("memoryMiB should be at least 64")
 	}
 	if time.Duration(c.RegisterTTL) < time.Minute || time.Duration(c.RegisterTTL) > 24*time.Hour {
 		add("registerTTL should be between 1m and 24h")

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,12 +32,14 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	relayv2 "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	libp2pquic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	"github.com/libp2p/go-libp2p/x/rate"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
@@ -118,8 +121,13 @@ func Start(cfg Config, key crypto.PrivKey, log *slog.Logger) (*Relay, error) {
 	}
 	// Connections: every server's, its devices' and a margin. Servers and
 	// devices in a circuit are protected by the relay itself.
-	hi := cfg.Limits.Servers*(cfg.Limits.Circuits+1) + 64
+	hi := connBudget(cfg)
 	cm, err := connmgr.NewConnManager(hi*3/4, hi, connmgr.WithGracePeriod(time.Minute))
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	rm, err := resources(cfg)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -133,6 +141,7 @@ func Start(cfg Config, key crypto.PrivKey, log *slog.Logger) (*Relay, error) {
 		libp2p.Security(noise.ID, noise.New),
 		libp2p.Muxer(yamux.ID, yamux.DefaultTransport),
 		libp2p.ConnectionManager(cm),
+		libp2p.ResourceManager(rm),
 		libp2p.DisableMetrics(),
 		// A relay is somewhere everyone can reach, by definition; it doesn't
 		// need to be told so, and must not go looking for relays of its own.
@@ -170,7 +179,7 @@ func Start(cfg Config, key crypto.PrivKey, log *slog.Logger) (*Relay, error) {
 	res.MaxReservationsPerIP = cfg.Limits.PerIP
 	res.MaxReservationsPerASN = max(res.MaxReservationsPerASN, cfg.Limits.PerIP)
 	res.BufferSize = 16 << 10
-	ph := &pacingHost{Host: h, ctx: ctx, kbps: cfg.Limits.Kbps, shared: newBucket(cfg.Limits.TotalKbps), m: m}
+	ph := &pacingHost{Host: h, ctx: ctx, kbps: cfg.Limits.Kbps, shared: newBucket(cfg.Limits.TotalKbps), m: m, tap: cfg.tap}
 	ropts := []relayv2.Option{relayv2.WithResources(res), relayv2.WithACL(r.reg), relayv2.WithMetricsTracer(tracer{m})}
 	if cfg.AllowPrivate {
 		ropts = append(ropts, relayv2.WithReservationAddressFilter(func(ma.Multiaddr) bool { return true }))
@@ -202,6 +211,60 @@ func Start(cfg Config, key crypto.PrivKey, log *slog.Logger) (*Relay, error) {
 	return r, nil
 }
 
+// connBudget is how many connections the relay holds at most: one for each
+// server and each of its circuits, and a margin for servers registering.
+func connBudget(cfg Config) int { return cfg.Limits.Servers*(cfg.Limits.Circuits+1) + 64 }
+
+// resourceLimits are what the relay may use, whatever anyone sends it: memory
+// from MemoryMiB, which is the container's to give (libp2p left to itself
+// sizes this from the whole machine's memory, which in a container is far
+// more than it may use), and connections and file descriptors for every
+// server and circuit the configuration allows, and no more. What one address
+// may hold is in perAddress.
+func resourceLimits(cfg Config) rcmgr.ConcreteLimitConfig {
+	l := rcmgr.DefaultLimits
+	libp2p.SetDefaultServiceLimits(&l)
+	mem := int64(cfg.Limits.MemoryMiB) << 20
+	conns := connBudget(cfg)
+	transient := max(64, conns/4)
+	return rcmgr.PartialLimitConfig{
+		System: rcmgr.ResourceLimits{
+			Conns: rcmgr.LimitVal(conns), ConnsInbound: rcmgr.LimitVal(conns), ConnsOutbound: rcmgr.LimitVal(conns),
+			FD: rcmgr.LimitVal(conns + 64), Memory: rcmgr.LimitVal64(mem),
+		},
+		// Connections that haven't finished saying who they are yet: a slow or
+		// silent stranger holds one of these, and only these, until it times out.
+		Transient: rcmgr.ResourceLimits{
+			Conns: rcmgr.LimitVal(transient), ConnsInbound: rcmgr.LimitVal(transient), ConnsOutbound: rcmgr.LimitVal(transient),
+			FD: rcmgr.LimitVal(transient), Memory: rcmgr.LimitVal64(mem / 8),
+		},
+	}.Build(l.Scale(mem, conns+64))
+}
+
+// perAddress is how many connections one address may hold at once (an IPv4
+// address, or an IPv6 /56): its servers' share, each with its circuits, so a
+// household or an office behind one address gets what WITTYRELAY_PER_IP
+// says, and never fewer than libp2p's own eight.
+func perAddress(cfg Config) int { return max(8, cfg.Limits.PerIP*(cfg.Limits.Circuits+1)) }
+
+func resources(cfg Config) (network.ResourceManager, error) {
+	n := perAddress(cfg)
+	// New connections from one address: a burst of that many, then two a second.
+	pace := rate.Limit{RPS: 2, Burst: n}
+	return rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(resourceLimits(cfg)),
+		rcmgr.WithLimitPerSubnet(
+			[]rcmgr.ConnLimitPerSubnet{{PrefixLength: 32, ConnCount: n}},
+			[]rcmgr.ConnLimitPerSubnet{{PrefixLength: 56, ConnCount: n}, {PrefixLength: 48, ConnCount: 4 * n}}),
+		rcmgr.WithConnRateLimiters(&rate.Limiter{
+			NetworkPrefixLimits: []rate.PrefixLimit{{Prefix: netip.MustParsePrefix("127.0.0.0/8")}, {Prefix: netip.MustParsePrefix("::1/128")}},
+			SubnetRateLimiter: rate.SubnetLimiter{
+				IPv4SubnetLimits: []rate.SubnetLimit{{PrefixLength: 32, Limit: pace}},
+				IPv6SubnetLimits: []rate.SubnetLimit{{PrefixLength: 56, Limit: pace}},
+				GracePeriod:      time.Minute,
+			},
+		}))
+}
+
 // ID is the relay's ID: what servers pin.
 func (r *Relay) ID() string { return r.host.ID().String() }
 
@@ -229,9 +292,17 @@ func (r *Relay) handleInfo(s network.Stream) {
 	_ = writeMessage(s, r.offer, maxAnswer)
 }
 
+// registerWait is the most a registration may take, however slowly it is
+// sent: a stream that trickles is cut off then.
+const registerWait = 20 * time.Second
+
 func (r *Relay) handleRegister(s network.Stream) {
 	defer s.Close()
-	_ = s.SetDeadline(time.Now().Add(20 * time.Second))
+	wait := registerWait
+	if r.cfg.registerWait > 0 {
+		wait = r.cfg.registerWait
+	}
+	_ = s.SetDeadline(time.Now().Add(wait))
 	server := s.Conn().RemotePeer()
 	ip := ipOf(s.Conn().RemoteMultiaddr())
 	var req RegisterRequest
