@@ -65,8 +65,11 @@ func (r *registry) register(server peer.ID, ip netip.Addr, req RegisterRequest) 
 		r.m.refused(reason)
 		return RegisterResponse{Reason: reason, Error: msg}
 	}
-	// Counted per address and per server, both, before anything else is looked at.
-	if !r.tries.allow("ip:"+ip.String()) || !r.tries.allow("id:"+server.String()) {
+	// Counted per network before anything else is looked at: an IPv6 network
+	// hands one home a great many addresses, so they count as one (netOf).
+	// Per server only once the key is right, so a stranger making up server
+	// IDs can't fill the table every server's renewals are counted in.
+	if !r.tries.allow("ip:" + netOf(ip).String()) {
 		return refuse("busy", "Too many registrations; try again in a minute.")
 	}
 	if req.V != 1 {
@@ -77,6 +80,9 @@ func (r *registry) register(server peer.ID, ip netip.Addr, req RegisterRequest) 
 			return refuse("key", "This relay needs an access key from whoever runs it.")
 		}
 		return refuse("key", "That access key isn't one this relay knows.")
+	}
+	if !r.tries.allow("id:" + server.String()) {
+		return refuse("busy", "Too many registrations; try again in a minute.")
 	}
 	if len(req.Devices) > r.cfg.Limits.DevicesPerServer {
 		return refuse("bad", "Too many devices listed for this relay.")
@@ -107,7 +113,7 @@ func (r *registry) register(server peer.ID, ip netip.Addr, req RegisterRequest) 
 		}
 		same := 0
 		for _, s := range r.servers {
-			if s.ip == ip {
+			if netOf(s.ip) == netOf(ip) {
 				same++
 			}
 		}
@@ -172,6 +178,17 @@ func ipOf(a ma.Multiaddr) netip.Addr {
 	}
 	out, _ := netip.AddrFromSlice(ip)
 	return out.Unmap()
+}
+
+// netOf is the network an address counts as for limits: the address itself
+// for IPv4, and its /64 for IPv6, the least one home or one server is given.
+func netOf(ip netip.Addr) netip.Prefix {
+	if ip.Is4() || !ip.IsValid() {
+		p, _ := ip.Prefix(ip.BitLen())
+		return p
+	}
+	p, _ := ip.Prefix(64)
+	return p
 }
 
 // window allows so many tries per key in a stretch of time, for a bounded

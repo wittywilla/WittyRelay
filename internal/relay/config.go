@@ -217,6 +217,10 @@ func (c *Config) Check() error {
 				add("an access key is shorter than 16 characters: make one with: wittyrelay key")
 				break
 			}
+			if strings.HasPrefix(strings.ToLower(k), "change-me") {
+				add("an access key is still the example's placeholder: make one with: wittyrelay key")
+				break
+			}
 		}
 	default:
 		add("access must be \"open\" or \"key\", not %q", c.Access)
