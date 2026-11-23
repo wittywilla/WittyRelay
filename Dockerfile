@@ -3,9 +3,10 @@
 #
 # A static binary on distroless: no shell, no package manager, runs as an
 # unprivileged user. Built for each platform buildx asks for (amd64, arm64)
-# by cross-compiling, so no emulation is needed.
+# by cross-compiling, so no emulation is needed. Base images are pinned by
+# digest; Dependabot proposes new ones.
 
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS build
 ARG TARGETOS TARGETARCH
 ARG VERSION=0.1.0-dev
 WORKDIR /src
@@ -17,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     -o /out/wittyrelay ./cmd/wittyrelay \
  && mkdir -p /out/data
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 COPY --from=build /out/wittyrelay /usr/local/bin/wittyrelay
 COPY --from=build --chown=65532:65532 /out/data /data
 USER 65532:65532

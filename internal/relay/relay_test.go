@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -347,4 +348,55 @@ func FuzzReadMessage(f *testing.F) {
 			t.Fatal("registered without the key")
 		}
 	})
+}
+
+func TestIPv6NetworkCountsAsOne(t *testing.T) {
+	cfg := testConfig()
+	cfg.Access = "open"
+	cfg.Limits.RegisterPerMinute, cfg.Limits.PerIP = 3, 1
+	reg := newRegistry(&cfg, newMetrics())
+	// Addresses from one /64 share one allowance of tries.
+	for i := 0; i < 5; i++ {
+		id, _ := peer.IDFromPrivateKey(key(t, byte(20+i)))
+		ip := ipOf(ma.StringCast(fmt.Sprintf("/ip6/2001:db8:1:2::%x/tcp/1", i+1)))
+		res := reg.register(id, ip, RegisterRequest{V: 1})
+		if i == 0 && !res.OK {
+			t.Fatalf("first server: %+v", res)
+		}
+		if i == 1 && (res.OK || res.Reason != "full") {
+			t.Fatalf("a second server from the same /64 past perIP 1: %+v", res)
+		}
+		if i >= 3 && (res.OK || res.Reason != "busy") {
+			t.Fatalf("try %d from the same /64: %+v", i+1, res)
+		}
+	}
+	// Another network is counted on its own.
+	id, _ := peer.IDFromPrivateKey(key(t, 40))
+	if res := reg.register(id, ipOf(ma.StringCast("/ip6/2001:db8:9:9::1/tcp/1")), RegisterRequest{V: 1}); !res.OK {
+		t.Fatalf("another network: %+v", res)
+	}
+}
+
+func TestWrongKeysDontFillTheServerTable(t *testing.T) {
+	cfg := testConfig()
+	cfg.Limits.RegisterPerMinute = 1_000_000
+	reg := newRegistry(&cfg, newMetrics())
+	reg.tries = newWindow(cfg.Limits.RegisterPerMinute, time.Minute, 8)
+	ip := ipOf(ma.StringCast("/ip4/203.0.113.9/tcp/1"))
+	for i := 0; i < 50; i++ {
+		id, _ := peer.IDFromPrivateKey(key(t, byte(60+i)))
+		reg.register(id, ip, RegisterRequest{V: 1, Key: "not-the-key-at-all-0000"})
+	}
+	id, _ := peer.IDFromPrivateKey(key(t, 2))
+	if res := reg.register(id, ipOf(ma.StringCast("/ip4/198.51.100.7/tcp/1")), RegisterRequest{V: 1, Key: testKey}); !res.OK {
+		t.Fatalf("a server with the key, after strangers with made-up IDs: %+v", res)
+	}
+}
+
+func TestExamplePlaceholderKeyIsRefused(t *testing.T) {
+	c := Default()
+	c.Keys = []string{"change-me-run-wittyrelay-key"}
+	if err := c.Check(); err == nil || !strings.Contains(err.Error(), "placeholder") {
+		t.Fatalf("the docker-compose example's key was taken: %v", err)
+	}
 }
