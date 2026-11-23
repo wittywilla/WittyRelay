@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -109,6 +110,12 @@ func run() int {
 	if err != nil {
 		log.Error("the configuration isn't usable", "err", err)
 		return 2
+	}
+	// The garbage collector works to the same budget as the connections, plus
+	// room for the program itself, unless GOMEMLIMIT says otherwise: so the
+	// relay slows down to stay inside a container's limit instead of being killed.
+	if os.Getenv("GOMEMLIMIT") == "" {
+		debug.SetMemoryLimit(int64(cfg.Limits.MemoryMiB+48) << 20)
 	}
 	key, err := relay.LoadKey(cfg.DataDir)
 	if err != nil {

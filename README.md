@@ -94,14 +94,17 @@ From `docker-compose.yml`'s `environment`, or a JSON file (see [`deploy/wittyrel
 | `WITTYRELAY_LISTEN` | `listen` | every interface on the port | Replaces what is listened on |
 | `WITTYRELAY_ACCESS` | `access` | key | `key`: servers need a key. `open`: any server may register |
 | `WITTYRELAY_KEYS` | `keys` | none | Access keys, comma-separated, 16 characters or more |
+| `WITTYRELAY_KEYS_FILE` | | none | A file of access keys, one a line (or comma-separated), instead: for Docker secrets |
 | `WITTYRELAY_KBPS`, `WITTYRELAY_TOTAL_KBPS` | `limits.kbps`, `limits.totalKbps` | 8000, 50000 | Speed limits in kbit/s (0: none) |
 | `WITTYRELAY_MAX_HEIGHT` | `limits.maxHeight` | 1080 | Picture height (0: any) |
 | `WITTYRELAY_DATA_MIB`, `WITTYRELAY_MINUTES` | `limits.dataMiB`, `limits.minutes` | 4096, 180 | Per connection (0: none) |
 | `WITTYRELAY_SERVERS`, `WITTYRELAY_CIRCUITS`, `WITTYRELAY_PER_IP` | `limits.servers`, `.circuits`, `.perIP` | 32, 8, 4 | |
 | `WITTYRELAY_REGISTER_PER_MINUTE`, `WITTYRELAY_DEVICES_PER_SERVER` | | 10, 512 | |
+| `WITTYRELAY_MEMORY_MIB` | `limits.memoryMiB` | 192 | Memory for connections and streams: a little under the container's limit |
 | `WITTYRELAY_REGISTER_TTL` | `registerTTL` | 15m | How long a registration holds unless renewed |
 | `WITTYRELAY_HTTP` | `http` | :8080 | Health and metrics ("" for none) |
 | `WITTYRELAY_METRICS_TOKEN` | `metricsToken` | none | Bearer token for `/metrics` |
+| `WITTYRELAY_METRICS_TOKEN_FILE` | | none | The same, from a file |
 | `WITTYRELAY_ALLOW_PRIVATE` | `allowPrivate` | false | Lets servers on private networks register: for a relay on a LAN, or tests |
 | `WITTYRELAY_DATA_DIR` | `dataDir` | /data | Where the relay's key is kept |
 | `WITTYRELAY_LOG_LEVEL` | `logLevel` | info | Logs are JSON lines on standard output |
@@ -134,7 +137,8 @@ Why circuit relay v2 and not TURN: both ends already speak it, it already carrie
 ## Security
 
 - **It can't read what it carries**, and can't pretend to be a server: a connection to the wrong key fails.
-- Access keys are compared in constant time and never logged. A key is a password: give each server owner their own, and take a key out of `WITTYRELAY_KEYS` to cut that owner off.
+- Access keys are compared in constant time and never logged. A key is a password: give each server owner their own, and take a key out of `WITTYRELAY_KEYS` to cut that owner off. Anyone who can inspect the container sees its environment: `WITTYRELAY_KEYS_FILE` with a Docker secret keeps keys out of it.
+- What it may use is fixed by its configuration, not by the machine: memory (`WITTYRELAY_MEMORY_MIB`), connections and file descriptors for the servers and circuits it allows and a margin, at most one address's share at a time (`WITTYRELAY_PER_IP` servers, each with its circuits: 36 by default; an IPv6 /56 counts as one address), and a pace for new ones. A connection that hasn't said who it is yet counts against a smaller share of its own.
 - Every message is size-checked before it is read (64 kB for a registration); registrations are rate-limited per address and per server; the tables that count them are bounded.
 - The image is distroless, runs as user 65532 with no shell, and the Compose file adds a read-only root, no capabilities and memory and process limits.
 - What the relay sees: both ends' IP addresses, when, and how much. Its logs keep the end of each server's ID and its IP address on registration.

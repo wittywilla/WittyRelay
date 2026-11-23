@@ -22,6 +22,8 @@ services:
       # "key": only servers you gave a key to. "open": any server (still registered and limited).
       WITTYRELAY_ACCESS: "key"
       WITTYRELAY_KEYS: "change-me-run-wittyrelay-key"
+      # Or keep keys out of the environment: a file, one key a line, as a Docker secret.
+      # WITTYRELAY_KEYS_FILE: /run/secrets/wittyrelay_keys
       # Limits, told to every server before it uses the relay.
       WITTYRELAY_KBPS: "8000"         # per connection, each way
       WITTYRELAY_TOTAL_KBPS: "50000"  # everything together, each way
@@ -29,6 +31,7 @@ services:
       WITTYRELAY_DATA_MIB: "4096"     # per connection, then it starts a new one
       WITTYRELAY_MINUTES: "180"
       WITTYRELAY_SERVERS: "32"
+      WITTYRELAY_MEMORY_MIB: "192"   # a little under mem_limit below
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

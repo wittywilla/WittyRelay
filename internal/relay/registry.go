@@ -7,8 +7,10 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -98,10 +100,7 @@ func (r *registry) register(server peer.ID, ip netip.Addr, req RegisterRequest) 
 		}
 		devices[id] = struct{}{}
 	}
-	name := req.Name
-	if len(name) > 60 {
-		name = name[:60]
-	}
+	name := cleanName(req.Name, 60)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -168,6 +167,31 @@ func (r *registry) AllowConnect(src peer.ID, _ ma.Multiaddr, dest peer.ID) bool 
 	}
 	r.m.refused("connect")
 	return false
+}
+
+// cleanName keeps a name a server sent fit for the log and the metrics:
+// valid UTF-8, no control characters or the invisible ones that turn text
+// around, at most max bytes, cut between characters.
+func cleanName(s string, max int) string {
+	s = strings.ToValidUTF8(s, "")
+	s = strings.Map(func(r rune) rune {
+		switch {
+		case r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0):
+			return ' '
+		case r == 0x061c, r == 0x200e, r == 0x200f, r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069, r == 0xfeff:
+			return -1
+		}
+		return r
+	}, s)
+	s = strings.TrimSpace(s)
+	if len(s) > max {
+		s = s[:max]
+		for !utf8.ValidString(s) {
+			s = s[:len(s)-1]
+		}
+		s = strings.TrimSpace(s)
+	}
+	return s
 }
 
 // ipOf is the IP address a multiaddr starts with.
