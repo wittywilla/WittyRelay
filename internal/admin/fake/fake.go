@@ -30,7 +30,7 @@ func New(cfg relay.Config) *Relay {
 	now := time.Now()
 	return &Relay{start: now.Add(-(3*24*time.Hour + 4*time.Hour + 12*time.Minute)),
 		bytes: 412 << 30, opened: 1843, Offer: relay.OfferOf(cfg), Now: time.Now,
-		Refused: map[string]int64{"key": 12, "busy": 4, "connect": 3, "circuit-limit": 1}}
+		Refused: map[string]int64{"key": 12, "busy": 4, "connect": 3, "circuit-denied": 3, "circuit-limit": 1}}
 }
 
 // Snapshot moves the numbers on as time passes: about 18 Mbit/s, rising and

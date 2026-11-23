@@ -269,8 +269,6 @@ var refusalLabels = map[string]string{
 	"reservation-limit":      "Place refused: the relay's place limit",
 	"circuit-refused":        "Connection refused",
 	"reservation-refused":    "Place refused",
-	"circuit-denied":         "Connection denied",
-	"reservation-denied":     "Place denied",
 	"circuit-no-reservation": "Connection to a server holding no place",
 	"circuit-failed":         "Connection the server didn't answer",
 	"circuit-malformed":      "Connection request the relay couldn't read",
@@ -302,9 +300,17 @@ func (s *Server) statusView() statusView {
 	var hit int64
 	reasons := make([]string, 0, len(snap.Refused))
 	for k := range snap.Refused {
+		// libp2p reports what the relay's own list refused ("connect",
+		// "reserve") once more as "denied": count each refusal once.
+		if k == "circuit-denied" || k == "reservation-denied" {
+			continue
+		}
 		reasons = append(reasons, k)
 	}
-	sort.Slice(reasons, func(i, j int) bool { return snap.Refused[reasons[i]] > snap.Refused[reasons[j]] })
+	sort.Slice(reasons, func(i, j int) bool {
+		a, b := snap.Refused[reasons[i]], snap.Refused[reasons[j]]
+		return a > b || (a == b && reasons[i] < reasons[j])
+	})
 	for _, k := range reasons {
 		n := snap.Refused[k]
 		hit += n
