@@ -9,6 +9,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const [base = 'http://localhost:18281', out = '../docs/images'] = process.argv.slice(2)
+const only = process.env.ONLY ? process.env.ONLY.split(',') : null // e.g. ONLY=settings
 const password = process.env.ADMIN_PASSWORD
 if (!password) throw new Error('set ADMIN_PASSWORD')
 mkdirSync(out, { recursive: true })
@@ -26,11 +27,17 @@ for (const s of shots) {
   await page.getByLabel('Admin password').fill(password)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await page.waitForURL(/\/status$/)
-  for (const p of s.pages) {
+  for (const p of s.pages.filter((p) => !only || only.includes(p))) {
     await page.goto(`${base}/${p}`)
     await page.waitForLoadState('networkidle')
     const file = join(out, `admin-${p}${s.suffix}.png`)
-    await page.screenshot({ path: file, fullPage: s.suffix !== '-phone' })
+    if (s.suffix !== '-phone') {
+      // The whole page at once, so the sticky Save bar sits where it ends up, not mid-page.
+      const h = await page.evaluate(() => document.documentElement.scrollHeight)
+      await page.setViewportSize({ width: s.w, height: h })
+    }
+    await page.screenshot({ path: file })
+    await page.setViewportSize({ width: s.w, height: s.h })
     console.log(file)
   }
   await ctx.close()

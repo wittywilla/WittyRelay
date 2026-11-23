@@ -188,6 +188,7 @@ main:focus { outline: none; }
 /* ---- forms ---- */
 .stack { display: flex; flex-direction: column; gap: var(--sp-4); }
 .narrow { max-width: 420px; }
+.narrow > .btn { align-self: flex-start; }
 .auth { max-width: 480px; width: 100%; margin: var(--sp-8) auto 0; gap: var(--sp-4); }
 .aside { color: var(--fg-2); font-size: var(--text-md); }
 .aside summary { cursor: pointer; color: var(--accent-text); font-weight: 600; border-radius: var(--r-sm); }
