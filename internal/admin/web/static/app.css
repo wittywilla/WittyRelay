@@ -194,6 +194,22 @@ main:focus { outline: none; }
 .narrow { max-width: 420px; }
 .narrow > .btn { align-self: flex-start; }
 .auth { max-width: 480px; width: 100%; margin: var(--sp-8) auto 0; gap: var(--sp-4); }
+/* Signed out (first run, signing in): one card, centred both ways, the relay's mark and name at its top, small
+   enough for a 1280x720 screen and a phone without scrolling. WittyMediaServer's standalone pages are the same. */
+body.standalone { background: radial-gradient(70% 60% at 50% 0%, rgb(var(--accent-rgb) / .12), transparent 70%), var(--bg); }
+.sa-page { flex: 1; display: grid; place-items: center; max-width: none; padding: var(--sp-4); }
+.sa-page .auth { margin: 0; gap: var(--sp-3); padding: clamp(var(--sp-5), 3vw, var(--sp-8)); border-radius: calc(var(--r-lg) * 1.5); box-shadow: var(--shadow); }
+.sa-page .auth h1 { font-size: var(--text-xl); text-align: center; }
+.sa-page .auth > h1 + p { color: var(--fg-2); text-align: center; }
+.sa-page .auth .btn.primary { width: 100%; }
+.sa-page .aside { text-align: center; }
+.sa-page .aside[open] { text-align: start; }
+.sa-brand { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); min-width: 0; font-weight: 700; font-size: var(--text-md); }
+.sa-brand span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-brand b { color: var(--accent-text); font-weight: 700; }
+.sa-foot { color: var(--fg-3); font-size: var(--text-sm); text-align: center; }
+.sa-foot a { color: var(--fg-2); }
+@media (max-height: 820px) { .sa-page .auth { gap: var(--sp-3); padding: var(--sp-5); } .sa-page .stack { gap: var(--sp-3); } }
 .aside { color: var(--fg-2); font-size: var(--text-md); }
 .aside summary { cursor: pointer; color: var(--accent-text); font-weight: 600; border-radius: var(--r-sm); }
 .aside[open] { display: flex; flex-direction: column; gap: var(--sp-2); }
