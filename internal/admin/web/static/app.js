@@ -20,6 +20,14 @@
     setTimeout(() => { b.textContent = was }, 1600)
   })
 
+  // The top bar's height, for scroll-padding-top in app.css: a jump to part of the page lands below the bar.
+  const bar = document.querySelector('header.top')
+  if (bar) {
+    const measure = () => document.documentElement.style.setProperty('--top-h', bar.offsetHeight + 'px')
+    measure()
+    if ('ResizeObserver' in window) new ResizeObserver(measure).observe(bar)
+  }
+
   if (!document.querySelector('[data-spark]')) return
 
   const rows = (tbody, list) => {

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Admin page: a link to part of a page lands below the top bar** (#13). Skip to content, and the sections on
+  Status, Health and Settings, used to land under the sticky bar. The e2e test checks every page at a computer's
+  and a phone's width: nothing under the bar, the title in line with the page, and no heading said twice.
+
 ## 0.2.0
 
 ### New

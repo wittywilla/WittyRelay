@@ -143,6 +143,45 @@ test('phones: no sideways scrolling on any page', async () => {
   await page.setViewportSize({ width: 1280, height: 800 })
 })
 
+test('layout: nothing under the top bar, each page reads from one edge', async () => {
+  for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size)
+    for (const p of pages) {
+      await page.goto(p)
+      const faults = await page.evaluate(() => {
+        const out = []
+        const vis = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none' }
+        const what = (e) => `${e.tagName.toLowerCase()} "${(e.textContent || '').trim().slice(0, 40)}"`
+        const barBottom = () => document.querySelector('header.top').getBoundingClientRect().bottom
+        const main = document.querySelector('main')
+        // As the page opens, nothing is drawn under the bar.
+        for (const e of main.querySelectorAll('h1, h2, p, a, button, input, label')) {
+          const r = e.getBoundingClientRect()
+          if (vis(e) && r.top < barBottom() - 1 && r.bottom > 0) out.push(`${what(e)} under the bar`)
+        }
+        // The title starts where the page's content starts: one edge, not a centred title over left-aligned cards.
+        const h1 = main.querySelector('h1')
+        const first = [...main.children].find((c) => vis(c) && !c.contains(h1) && c.getBoundingClientRect().top >= h1.getBoundingClientRect().bottom)
+        if (first && Math.abs(h1.getBoundingClientRect().left - first.getBoundingClientRect().left) > 2) out.push(`the title starts ${Math.round(h1.getBoundingClientRect().left - first.getBoundingClientRect().left)}px from the content`)
+        if (!['start', 'left'].includes(getComputedStyle(h1).textAlign)) out.push(`the title is ${getComputedStyle(h1).textAlign}`)
+        // No heading said twice.
+        const hs = [...main.querySelectorAll('h1, h2')].filter(vis).map((h) => h.textContent.trim().toLowerCase())
+        for (const h of hs.filter((h, i) => hs.indexOf(h) !== i)) out.push(`"${h}" twice`)
+        // A link to part of the page (the skip link, a section) lands below the bar.
+        for (const id of ['main', ...[...main.querySelectorAll('section[id], h2[id]')].map((e) => e.id)]) {
+          location.hash = '#' + id
+          const top = document.getElementById(id).getBoundingClientRect().top
+          if (top < barBottom() - 1) out.push(`#${id} lands at ${Math.round(top)}, under the bar to ${Math.round(barBottom())}`)
+        }
+        history.replaceState(null, '', location.pathname)
+        return out
+      })
+      expect(faults, `${p} at ${size.width}px`).toEqual([])
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 800 })
+})
+
 test('dark mode follows the device', async () => {
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/status')

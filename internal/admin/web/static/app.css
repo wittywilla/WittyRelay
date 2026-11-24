@@ -83,6 +83,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* A link to part of a page (the skip link, #password) stops below the sticky top bar, not under it. app.js sets the
+   bar's real height; this is enough for it without the script. */
+html { scroll-padding-top: calc(var(--top-h, 7rem) + var(--sp-3)); }
 body {
   margin: 0; min-height: 100vh; display: flex; flex-direction: column;
   background: var(--bg); color: var(--fg); font: var(--text-base)/var(--leading-body) var(--font);
