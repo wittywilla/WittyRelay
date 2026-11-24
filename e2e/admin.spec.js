@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // WittyRelay's admin page in a real browser: first run, every page, settings,
-// sign out and in, the keyboard, phones, dark mode, and no CSP violations.
+// sign out and in, the keyboard, phones, the layout, dark mode, and no CSP violations.
 import { test, expect } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
@@ -23,10 +23,35 @@ test.afterAll(async () => {
   await page.close()
 })
 
+// A page with no app around it (first run, sign-in): one card with the relay's name on it, centred both ways, no bar
+// above it, and nothing to scroll, at a computer's and a phone's size.
+async function standalone(where) {
+  for (const size of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size)
+    const faults = await page.evaluate(() => {
+      const out = []
+      const cards = [...document.querySelectorAll('main .card')]
+      if (cards.length !== 1) return [`${cards.length} cards`]
+      const c = cards[0].getBoundingClientRect()
+      const m = document.querySelector('main').getBoundingClientRect()
+      if (document.querySelector('header.top')) out.push('the app bar is drawn')
+      if (!/WittyRelay/.test(cards[0].textContent.replace(/\s+/g, ''))) out.push("the card doesn't name the relay")
+      if (Math.abs((c.left + c.right) / 2 - innerWidth / 2) > 2) out.push(`the card is ${Math.round((c.left + c.right) / 2 - innerWidth / 2)}px off the middle`)
+      const room = m.height - c.height
+      if (room > 40 && Math.abs((c.top + c.bottom) / 2 - (m.top + m.bottom) / 2) > 24) out.push(`the card is ${Math.round((c.top + c.bottom) / 2 - (m.top + m.bottom) / 2)}px off the middle of the page, top to bottom`)
+      if (document.documentElement.scrollHeight > innerHeight + 1 && innerHeight >= 720 && innerWidth > 600) out.push(`it scrolls: ${document.documentElement.scrollHeight} > ${innerHeight}`)
+      return out
+    })
+    expect(faults, `${where} at ${size.width}x${size.height}`).toEqual([])
+  }
+  await page.setViewportSize({ width: 1280, height: 800 })
+}
+
 test('first run: the setup token sets the password', async () => {
   await page.goto('/')
   await expect(page).toHaveURL(/\/setup$/)
   await expect(page.getByRole('heading', { name: 'Set the admin password' })).toBeVisible()
+  await standalone('first run')
 
   await page.getByLabel('Setup token').fill('not-the-token')
   await page.getByLabel('New password').fill(password)
@@ -86,6 +111,7 @@ test('sign out, a wrong password, then sign in', async () => {
   await expect(page).toHaveURL(/\/login\?out=1$/)
   await page.goto('/status')
   await expect(page).toHaveURL(/\/login$/)
+  await standalone('sign-in')
   await page.getByLabel('Admin password').fill('not the password')
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByRole('alert')).toContainText("isn't the admin password")

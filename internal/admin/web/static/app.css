@@ -197,6 +197,13 @@ main:focus { outline: none; }
 .narrow { max-width: 420px; }
 .narrow > .btn { align-self: flex-start; }
 .auth { max-width: 480px; width: 100%; margin: var(--sp-8) auto 0; gap: var(--sp-4); }
+/* Signed out, the page is the card (the standalone-page standard): the relay's name on it, centred both ways in the
+   window, nothing to scroll at 720 pixels tall. */
+.solo main { justify-content: center; padding-block: var(--sp-4); }
+.solo .foot { padding-block: var(--sp-3); }
+.solo .auth { margin: 0 auto; }
+.lockup { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-1); font-weight: 700; font-size: var(--text-lg); letter-spacing: -.01em; }
+.lockup b { color: var(--accent-text); font-weight: 700; }
 .aside { color: var(--fg-2); font-size: var(--text-md); }
 .aside summary { cursor: pointer; color: var(--accent-text); font-weight: 600; border-radius: var(--r-sm); }
 .aside[open] { display: flex; flex-direction: column; gap: var(--sp-2); }

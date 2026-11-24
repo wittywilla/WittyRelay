@@ -1,5 +1,6 @@
 {{define "content"}}
 <section class="auth card">
+  {{template "lockup"}}
   <h1>Sign in</h1>
   <p>To this relay's admin page.</p>
   {{if not .Secure}}<p class="note warn" role="alert">This page isn't open over HTTPS or from this machine, so the browser won't keep you signed in. Open it at <code>http://localhost:8081</code> on the relay's machine, through an SSH tunnel, or behind a reverse proxy with HTTPS.</p>{{end}}
