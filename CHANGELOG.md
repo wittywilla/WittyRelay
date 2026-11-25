@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Admin page: a link to part of a page lands below the top bar** (#13). Skip to content, and the sections on
+  Status, Health and Settings, used to land under the sticky bar. The e2e test checks every page at a computer's
+  and a phone's width: nothing under the bar, the title in line with the page, and no heading said twice.
+- **Signing in and first run are one card** with the relay's name on it, centred both ways, with no bar above it and
+  nothing to scroll at 720 pixels tall, as WittyMediaServer's own sign-in pages are. The e2e test checks both.
+
 ## 0.2.0
 
 ### New

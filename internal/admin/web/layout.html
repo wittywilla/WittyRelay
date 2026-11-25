@@ -11,8 +11,9 @@
 <link rel="stylesheet" href="/assets/app.css">
 <script src="/assets/app.js" defer></script>
 </head>
-<body>
+<body{{if not .Signed}} class="solo"{{end}}>
 <a class="skip" href="#main">Skip to content</a>
+{{if .Signed}}
 <header class="top">
   <div class="top-row">
     <a class="brand" href="/">
@@ -37,6 +38,7 @@
   </nav>
   {{end}}
 </header>
+{{end}}
 <main id="main" tabindex="-1">
 {{if .Flash}}<p class="note ok" role="status">{{.Flash}}</p>{{end}}
 {{if .Error}}<p class="note bad" role="alert">{{.Error}}</p>{{end}}
@@ -48,3 +50,5 @@
 </footer>
 </body>
 </html>
+{{/* Signed out (setup, sign-in) the page is one card with the relay's name on it, centred, and no bar above it. */}}
+{{define "lockup"}}<p class="lockup"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="8" class="mark-bg"/><path class="mark-fg" d="M7 11h6l3 10 3-10h6" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Witty<b>Relay</b></span></p>{{end}}
